@@ -1,0 +1,16 @@
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# OCaml / dune
+_build/
+
+# Local backups of the previous project config (not for the repo)
+*.bak

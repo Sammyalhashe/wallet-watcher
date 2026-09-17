@@ -1,0 +1,4 @@
+(library
+ (name portfolio_lib)
+ (libraries lwt lwt.unix uri cohttp cohttp-lwt cohttp-lwt-unix yojson
+   notty-community notty-community.lwt))

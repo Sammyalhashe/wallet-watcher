@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (public_name portfolio-tui)
+ (libraries portfolio_lib lwt lwt.unix))
