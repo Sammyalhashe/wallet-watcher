@@ -1,11 +1,21 @@
 (test
+ (name test_chain_api)
+ (modules test_chain_api test_util)
+ (libraries wallet_watcher yojson))
+
+(test
+ (name test_pie)
+ (modules test_pie)
+ (libraries wallet_watcher))
+
+(test
  (name test_portfolio)
  (modules test_portfolio)
- (libraries portfolio_lib yojson))
+ (libraries wallet_watcher wallet_watcher_tui yojson))
 
 ; Prints the dashboard from fixture data, so the layout can be checked
 ; without a terminal, a network or real balances.
 (executable
  (name render_preview)
  (modules render_preview)
- (libraries portfolio_lib notty-community notty-community.unix))
+ (libraries wallet_watcher wallet_watcher_tui notty-community notty-community.unix))

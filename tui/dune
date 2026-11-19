@@ -1,0 +1,4 @@
+(library
+ (name wallet_watcher_tui)
+ (public_name wallet_watcher.tui)
+ (libraries wallet_watcher lwt notty-community notty-community.lwt))

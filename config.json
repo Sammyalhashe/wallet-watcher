@@ -1,19 +1,26 @@
 {
-  "BTC": [
-    { "label": "Cold Storage", "address": "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97" },
-    { "label": "Satoshi Genesis", "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" }
-  ],
-  "ETH": [
-    { "label": "Vitalik", "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-    { "label": "Hot Wallet", "address": "0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8" }
-  ],
-  "SOL": [
-    { "label": "Staking", "address": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }
-  ],
-  "SUI": [
-    { "label": "Main", "address": "0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331" }
-  ],
-  "TAO": [
-    { "label": "Subnet Miner", "address": "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3" }
+  "wallets": [
+    {
+      "label": "Cold Storage",
+      "addresses": {
+        "bitcoin": "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97",
+        "ethereum": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        "base": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        "avalanche": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+      }
+    },
+    {
+      "label": "Satoshi Genesis",
+      "addresses": { "bitcoin": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" }
+    },
+    {
+      "label": "Hot Wallet",
+      "addresses": {
+        "ethereum": "0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8",
+        "solana": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "sui": "0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331",
+        "zcash": "t1XPq7rYVWBiyHdHRg1PJZrcCRrixXiLQrd"
+      }
+    }
   ]
 }

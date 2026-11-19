@@ -1,4 +1,5 @@
 (executable
  (name main)
- (public_name portfolio-tui)
- (libraries portfolio_lib lwt lwt.unix))
+ (public_name wallet-watcher)
+ (package wallet_watcher)
+ (libraries wallet_watcher wallet_watcher_tui lwt lwt.unix))
