@@ -14,3 +14,7 @@ _build/
 
 # Local backups of the previous project config (not for the repo)
 *.bak
+
+# nix
+result
+result-*

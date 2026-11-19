@@ -4,6 +4,12 @@
  (libraries wallet_watcher yojson))
 
 (test
+ (name test_config)
+ (modules test_config test_util)
+ (deps ../config.json)
+ (libraries wallet_watcher yojson))
+
+(test
  (name test_pie)
  (modules test_pie)
  (libraries wallet_watcher))
