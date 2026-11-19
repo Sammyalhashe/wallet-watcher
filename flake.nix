@@ -34,5 +34,6 @@
         })
     // {
       overlays.default = overlay;
+      homeManagerModules.default = import ./nix/hm-module.nix self;
     };
 }
