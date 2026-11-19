@@ -44,9 +44,9 @@ let fetch address =
           ("user-agent", Http.user_agent) ]
     in
     let request =
-      Http.guard label
-        (Cohttp_lwt_unix.Client.get ~headers
-           (Uri.of_string (api_url ^ Uri.pct_encode address))
+      Http.guard label (fun () ->
+        Cohttp_lwt_unix.Client.get ~headers
+          (Uri.of_string (api_url ^ Uri.pct_encode address))
         >>= Http.read_response label)
       |> Http.with_timeout label
     in

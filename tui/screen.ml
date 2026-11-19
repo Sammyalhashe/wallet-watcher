@@ -5,7 +5,15 @@ open Wallet_watcher
 open Palette
 
 let banner (p : Portfolio.t) =
-  I.hcat [ I.string a_header "NET WORTH  "; I.string a_banner (Format.fmt_usd p.total_usd) ]
+  let total =
+    match p.total_usd with
+    | None -> I.string a_dim "n/a (prices unavailable)"
+    | Some usd ->
+      I.hcat
+        [ I.string a_banner (Format.fmt_usd usd);
+          (if p.total_is_partial then I.string a_dim " (partial)" else I.empty) ]
+  in
+  I.hcat [ I.string a_header "NET WORTH  "; total ]
 
 let hint = function
   | { Nav.view = Table; _ } -> "c pie view   q quit"

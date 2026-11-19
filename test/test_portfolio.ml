@@ -4,6 +4,8 @@ open Wallet_watcher
 module Format = Wallet_watcher_tui.Format
 module Nav = Wallet_watcher_tui.Nav
 module Pie_view = Wallet_watcher_tui.Pie_view
+module Screen = Wallet_watcher_tui.Screen
+module Palette = Wallet_watcher_tui.Palette
 
 let failures = ref 0
 let passes = ref 0
@@ -74,7 +76,8 @@ let test_of_snapshot () =
     (List.length
        (List.filter (fun (x : Portfolio.position) -> x.network = Config.Avalanche) p.positions)
      = 2);
-  check_float "net worth sums every priced position" ~expect:77000. p.total_usd
+  check "a failed fetch makes the total partial" p.total_is_partial;
+  check_float "net worth sums every priced position" ~expect:77000. (Option.get p.total_usd)
 
 let test_by_asset () =
   print_endline "by_asset";
@@ -130,7 +133,8 @@ let test_unpriced () =
   check "unpriced pct is unknown, not 0" ((find "SUI" slices).pct = None);
   check_float "priced coin takes the whole pie" ~expect:100.
     (Option.get (find "BTC" slices).pct);
-  check_float "net worth ignores unpriced" ~expect:200. p.total_usd;
+  check_float "net worth ignores unpriced" ~expect:200. (Option.get p.total_usd);
+  check "unpriced holding marks total partial" p.total_is_partial;
   let by_wallet = Portfolio.by_wallet p in
   check "wallet holding only unpriced coins has no pct"
     ((find "B" by_wallet).pct = None && (find "B" by_wallet).usd = None);
@@ -219,7 +223,10 @@ let test_other_not_drillable () =
   in
   let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.BTC, 1.) ] many) in
   let rows = Nav.rows p Nav.Root_by_wallet in
+  check "nav fold size matches palette" (Nav.max_slices = Palette.max_slices);
   check "folds to palette size" (List.length rows = 8);
+  check "only the bucket is marked folded"
+    (List.for_all (fun (s : Portfolio.slice) -> s.folded = (s.name = "Other (3)")) rows);
   check_string "last row is Other" ~expect:"Other (3)" (List.nth rows 7).name;
   let state = pie_at Nav.Root_by_wallet 7 in
   check "Other does not drill" (Nav.step p state Nav.Drill = Some state);
@@ -259,13 +266,88 @@ let test_format () =
   check_string "pad right" ~expect:"   ab" (Format.pad `Right 5 "ab");
   check_string "pad leaves oversized alone" ~expect:"abcdef" (Format.pad `Left 3 "abcdef");
   check_string "truncate" ~expect:"abc.." (Format.truncate 5 "abcdefgh");
+  check_string "negative usd" ~expect:"-$123.00" (Format.fmt_usd (-123.));
+  check_string "negative usd groups" ~expect:"-$1,234.50" (Format.fmt_usd (-1234.5));
+  check_string "sanitize controls" ~expect:"a b  c d" (Format.sanitize "a\nb\r c\td");
+  check_string "sanitize non-ascii" ~expect:"Caf?? x" (Format.sanitize "Caf\xc3\xa9 x");
+  check_string "sanitize keeps ascii" ~expect:"Hello, w0rld!" (Format.sanitize "Hello, w0rld!");
+  check_string "truncate sanitizes first" ~expect:"a b.."
+    (Format.truncate 5 "a\nb cdefgh");
+  check "truncate never splits into invalid bytes"
+    (String.for_all (fun c -> Char.code c < 0x80) (Format.truncate 5 "\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"));
   check_string "breadcrumb root" ~expect:"NET WORTH > by coin" (Pie_view.breadcrumb Nav.Root_by_coin);
   check_string "breadcrumb coin" ~expect:"NET WORTH > BTC by wallet"
     (Pie_view.breadcrumb (Nav.Coin Config.BTC));
   check_string "breadcrumb wallet" ~expect:"NET WORTH > Ledger by coin"
     (Pie_view.breadcrumb (Nav.Wallet "Ledger"))
 
+let nasty_snapshot =
+  snapshot_of ~prices:[ (Config.BTC, 100.) ]
+    [ balance "Caf\xc3\xa9 wallet with a long name" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]);
+      balance "Caf\xc3\xa9 wallet with a long name" Config.Base
+        (Error "Line 1:\nInvalid token\r\n\xc3");
+      balance "B" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]
+
+let renders_without_raising state =
+  match Screen.render state (Portfolio.of_snapshot nasty_snapshot) (80, 40) with
+  | _ -> true
+  | exception _ -> false
+
+let test_render_is_safe () =
+  print_endline "render with hostile text";
+  List.iter
+    (fun (name, state) -> check name (renders_without_raising state))
+    [ ("table", Nav.initial);
+      ("pie by coin", pie_at Nav.Root_by_coin 0);
+      ("pie by wallet", pie_at Nav.Root_by_wallet 0);
+      ("pie drilled into wallet",
+       pie_at (Nav.Wallet "Caf\xc3\xa9 wallet with a long name") 0) ];
+  let p = Portfolio.of_snapshot nasty_snapshot in
+  check "price_error is sanitised too"
+    (match
+       Screen.render Nav.initial { p with price_error = Some "bad\n\xff" } (80, 40)
+     with
+     | _ -> true
+     | exception _ -> false);
+  check "breadcrumb is sanitised"
+    (String.for_all (fun c -> Char.code c >= 0x20 && Char.code c < 0x7f)
+       (Pie_view.breadcrumb (Nav.Wallet "a\nb\xc3\xa9")))
+
+let test_total_options () =
+  print_endline "total completeness";
+  let none = Portfolio.of_snapshot (snapshot_of [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]) in
+  check "nothing priced gives no total" (none.total_usd = None);
+  check "nothing priced is partial" none.total_is_partial;
+  let full =
+    Portfolio.of_snapshot
+      (snapshot_of ~prices:[ (Config.BTC, 5.) ] [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ])
+  in
+  check "fully priced total" (full.total_usd = Some 5. && not full.total_is_partial);
+  let pie_state = pie_at Nav.Root_by_coin 0 in
+  check "unpriced pie still renders" (renders_without_raising pie_state)
+
+let test_other_name_collision () =
+  print_endline "Other name collision";
+  let many =
+    List.init 9 (fun i ->
+        balance (if i = 8 then "Other (2)" else Printf.sprintf "W%d" i) Config.Bitcoin
+          (Ok [ (Config.BTC, float_of_int (20 - i)) ]))
+  in
+  let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.BTC, 1.) ] many) in
+  let rows = Nav.rows p Nav.Root_by_wallet in
+  check_string "bucket named like a wallet" ~expect:"Other (2)" (List.nth rows 7).name;
+  check "bucket does not drill"
+    (Nav.drill_target p (pie_at Nav.Root_by_wallet 7) = None);
+  check "real wallet with the same name drills when it is a slice"
+    (let few = Portfolio.of_snapshot
+         (snapshot_of ~prices:[ (Config.BTC, 1.) ]
+            [ balance "Other (2)" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]) in
+     Nav.drill_target few (pie_at Nav.Root_by_wallet 0) = Some (Nav.Wallet "Other (2)"))
+
 let () =
+  test_render_is_safe ();
+  test_total_options ();
+  test_other_name_collision ();
   test_of_snapshot ();
   test_by_asset ();
   test_by_wallet ();

@@ -4,7 +4,18 @@
    ASCII: a multi-byte glyph would count as several columns here but render as
    one, skewing the layout. Only the pie cells are non-ASCII. *)
 
+(* Notty's [I.string] raises on control characters and malformed UTF-8, and
+   external text (errors, labels) can contain both. *)
+let sanitize s =
+  String.map
+    (fun c ->
+       if Char.code c < 0x20 || Char.code c = 0x7f then ' '
+       else if Char.code c >= 0x80 then '?'
+       else c)
+    s
+
 let truncate width s =
+  let s = sanitize s in
   if String.length s <= width then s else String.sub s 0 (max 0 (width - 2)) ^ ".."
 
 let pad align width s =
@@ -15,6 +26,7 @@ let pad align width s =
     match align with `Left -> s ^ fill | `Right -> fill ^ s
 
 let short_address a =
+  let a = sanitize a in
   let n = String.length a in
   if n <= 20 then a else String.sub a 0 10 ^ ".." ^ String.sub a (n - 6) 6
 
@@ -29,11 +41,12 @@ let commas digits =
   Buffer.contents buf
 
 let fmt_usd v =
-  let s = Printf.sprintf "%.2f" v in
+  let s = Printf.sprintf "%.2f" (Float.abs v) in
+  let sign = if v < 0. && s <> "0.00" then "-" else "" in
   match String.index_opt s '.' with
   | Some i ->
-    "$" ^ commas (String.sub s 0 i) ^ String.sub s i (String.length s - i)
-  | None -> "$" ^ commas s
+    sign ^ "$" ^ commas (String.sub s 0 i) ^ String.sub s i (String.length s - i)
+  | None -> sign ^ "$" ^ commas s
 
 let fmt_amount v = Printf.sprintf "%.6f" v
 let fmt_share p = Printf.sprintf "%.2f%%" p

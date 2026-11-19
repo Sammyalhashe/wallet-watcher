@@ -1,7 +1,6 @@
-(* Text attributes, series colours and glyphs, and the slice-folding rule. *)
+(* Text attributes, series colours and glyphs. *)
 
 open Notty
-open Wallet_watcher
 
 let a_title = A.(fg lightgreen ++ st bold)
 let a_header = A.(fg white ++ st bold)
@@ -23,25 +22,3 @@ let series_attrs =
 
 let series_glyphs = [| '#'; '='; '+'; '*'; 'o'; 'x'; ':'; '~' |]
 let max_slices = Array.length series_glyphs
-
-(* Beyond the palette the tail folds into one bucket instead of reusing a colour. *)
-let fold_extra (slices : Portfolio.slice list) : Portfolio.slice list =
-  if List.length slices <= max_slices then slices
-  else begin
-    let keep = List.filteri (fun i _ -> i < max_slices - 1) slices in
-    let rest = List.filteri (fun i _ -> i >= max_slices - 1) slices in
-    let sum_known project =
-      List.fold_left
-        (fun acc s ->
-           match (acc, project s) with
-           | None, v -> v
-           | Some a, Some b -> Some (a +. b)
-           | acc, None -> acc)
-        None rest
-    in
-    keep
-    @ [ { Portfolio.name = Printf.sprintf "Other (%d)" (List.length rest);
-          amount = None;
-          usd = sum_known (fun (s : Portfolio.slice) -> s.usd);
-          pct = sum_known (fun (s : Portfolio.slice) -> s.pct) } ]
-  end

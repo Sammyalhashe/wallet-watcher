@@ -55,7 +55,10 @@ let number_at keys json =
     | Some f -> Ok f
     | None -> Error (Printf.sprintf "field %s is not a number" (String.concat "." keys)))
 
+let single_line s =
+  String.map (fun c -> if Char.code c < 0x20 || Char.code c = 0x7f then ' ' else c) s
+
 let parse_json body =
   match Yojson.Basic.from_string body with
   | json -> Ok json
-  | exception Yojson.Json_error msg -> Error ("invalid JSON: " ^ msg)
+  | exception Yojson.Json_error msg -> Error ("invalid JSON: " ^ single_line msg)

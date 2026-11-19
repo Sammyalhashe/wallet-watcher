@@ -28,22 +28,26 @@ let slices_of (p : Portfolio.t) = function
   | Coin asset -> Portfolio.asset_by_wallet p asset
   | Wallet label -> Portfolio.wallet_by_asset p label
 
-let rows p focus = Palette.fold_extra (slices_of p focus)
+(* Must equal [Palette.max_slices]; the TUI has one glyph per slice. *)
+let max_slices = 8
+
+let rows p focus = Portfolio.fold ~max_slices (slices_of p focus)
 
 let index_of_name p focus name =
   let rec find i = function
     | [] -> 0
-    | (s : Portfolio.slice) :: _ when s.name = name -> i
+    | (s : Portfolio.slice) :: _ when s.name = name && not s.folded -> i
     | _ :: rest -> find (i + 1) rest
   in
   find 0 (rows p focus)
 
-let selected_name p state =
-  List.nth_opt (rows p state.focus) state.selected
-  |> Option.map (fun (s : Portfolio.slice) -> s.name)
+let selected_drillable_name p state =
+  match List.nth_opt (rows p state.focus) state.selected with
+  | Some { Portfolio.folded = false; name; _ } -> Some name
+  | _ -> None
 
 let drill_target p state =
-  match (state.focus, selected_name p state) with
+  match (state.focus, selected_drillable_name p state) with
   | Root_by_coin, Some name ->
     List.find_opt (fun a -> Config.string_of_asset a = name) (Portfolio.assets p)
     |> Option.map (fun a -> Coin a)

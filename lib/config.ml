@@ -98,13 +98,20 @@ let load path =
   | exception Sys_error msg -> fail "%s" msg
 
 (* argv path, then ./config.json, then the XDG location. *)
-let default_path () =
+let config_path_of ~home ~xdg ~local_exists =
   let local = "config.json" in
-  if Sys.file_exists local then local
+  let under base = Filename.concat base (Filename.concat "wallet-watcher" "config.json") in
+  if local_exists then Ok local
   else
-    let base =
-      match Sys.getenv_opt "XDG_CONFIG_HOME" with
-      | Some d when d <> "" -> d
-      | _ -> Filename.concat (Sys.getenv "HOME") ".config"
-    in
-    Filename.concat base (Filename.concat "wallet-watcher" "config.json")
+    match (xdg, home) with
+    | Some d, _ when d <> "" && not (Filename.is_relative d) -> Ok (under d)
+    | _, Some h when h <> "" -> Ok (under (Filename.concat h ".config"))
+    | _ -> Error "cannot locate config: set HOME or XDG_CONFIG_HOME"
+
+let default_path () =
+  match
+    config_path_of ~home:(Sys.getenv_opt "HOME") ~xdg:(Sys.getenv_opt "XDG_CONFIG_HOME")
+      ~local_exists:(Sys.file_exists "config.json")
+  with
+  | Ok path -> path
+  | Error msg -> raise (Parse_error msg)

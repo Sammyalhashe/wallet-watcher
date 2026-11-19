@@ -191,8 +191,30 @@ let test_slice_order_clockwise () =
     && slice_at 4 3 = Some 2
     && slice_at 1 3 = Some 3)
 
+let visible_slices grid =
+  Array.fold_left
+    (Array.fold_left (fun acc -> function
+       | Some { Pie.slice; _ } -> if List.mem slice acc then acc else slice :: acc
+       | None -> acc))
+    [] grid
+
+let test_tiny_slice_is_visible () =
+  List.iter
+    (fun (radius, weights) ->
+      let shown = visible_slices (Pie.cells ~radius weights) in
+      check
+        (Printf.sprintf "every positive weight shows at radius %d" radius)
+        (List.for_all (fun i -> List.mem i shown)
+           (List.filteri (fun i _ -> List.nth weights i > 0.) (List.mapi (fun i _ -> i) weights))))
+    [ (8, [ 99.5; 0.5 ]); (8, [ 0.5; 99.5 ]); (8, [ 50.; 0.2; 49.8 ]);
+      (16, [ 99.9; 0.1 ]); (2, [ 99.5; 0.5 ]) ];
+  check "rows and cols helpers match the grid"
+    (let grid = Pie.cells ~radius:9 [ 1.; 2. ] in
+     Array.length grid = Pie.rows ~radius:9 && Array.length grid.(0) = Pie.cols ~radius:9)
+
 let () =
   test_dimensions ();
+  test_tiny_slice_is_visible ();
   test_single_slice_is_disc ();
   test_empty_inputs ();
   test_proportionality ();

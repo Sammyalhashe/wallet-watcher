@@ -21,7 +21,8 @@ type t = {
   failures : failure list;
   prices : (Config.asset * float) list;
   price_error : string option;
-  total_usd : float;
+  total_usd : float option;  (* None when no position could be priced *)
+  total_is_partial : bool;  (* some holding is unpriced or a fetch failed *)
 }
 
 type slice = {
@@ -29,6 +30,7 @@ type slice = {
   amount : float option;
   usd : float option;
   pct : float option;
+  folded : bool;  (* the "Other (n)" bucket, not a real entity *)
 }
 
 (* {1 Helpers} *)
@@ -84,12 +86,15 @@ let of_snapshot (s : Snapshot.t) =
                    error } ] ))
       ([], []) s.balances
   in
-  let total_usd =
-    Option.value ~default:0.
-      (sum_known (List.map (usd_of_position s.prices) positions))
+  let total_usd = sum_known (List.map (usd_of_position s.prices) positions) in
+  let any_unpriced =
+    List.exists
+      (fun (p : position) ->
+         p.amount > 0. && usd_of_position s.prices p = None)
+      positions
   in
   { positions; failures; prices = s.prices; price_error = s.price_error;
-    total_usd }
+    total_usd; total_is_partial = failures <> [] || any_unpriced }
 
 let assets t = distinct (fun (p : position) -> p.asset) t.positions
 let wallets t = distinct (fun (p : position) -> p.wallet) t.positions
@@ -108,7 +113,8 @@ let slice_of t ~name ~show_amount positions : slice =
   { name;
     amount = (if show_amount then Some (sum_amounts positions) else None);
     usd = sum_known (List.map (usd_of_position t.prices) positions);
-    pct = None }
+    pct = None;
+    folded = false }
 
 let with_pct_of_usd slices =
   let total = sum_known (List.map (fun (s : slice) -> s.usd) slices) in
@@ -157,6 +163,21 @@ let wallet_by_asset t label =
   |> List.map (fun (asset, ps) ->
        slice_of t ~name:(Config.string_of_asset asset) ~show_amount:true ps)
   |> with_pct_of_usd
+
+(* Beyond [max_slices] the tail folds into one bucket instead of reusing a colour. *)
+let fold ~max_slices (slices : slice list) : slice list =
+  if List.length slices <= max_slices then slices
+  else begin
+    let keep = List.filteri (fun i _ -> i < max_slices - 1) slices in
+    let rest = List.filteri (fun i _ -> i >= max_slices - 1) slices in
+    let sum_of project = sum_known (List.map project rest) in
+    keep
+    @ [ { name = Printf.sprintf "Other (%d)" (List.length rest);
+          amount = None;
+          usd = sum_of (fun (s : slice) -> s.usd);
+          pct = sum_of (fun (s : slice) -> s.pct);
+          folded = true } ]
+  end
 
 (* {1 Table} *)
 

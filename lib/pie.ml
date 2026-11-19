@@ -39,10 +39,13 @@ let slice_of_fraction ~slice_ends ~last_non_empty ~is_non_empty fraction =
   in
   find 0
 
+let rows ~radius = ((2 * radius) + 3) / 4
+let cols ~radius = radius
+
 let cells ~radius weights =
   if radius <= 0 then [||]
   else begin
-    let rows = ((2 * radius) + 3) / 4 and cols = radius in
+    let rows = rows ~radius and cols = cols ~radius in
     let positive =
       Array.of_list (List.map (fun w -> if w > 0. then w else 0.) weights)
     in
@@ -112,6 +115,40 @@ let cells ~radius weights =
           if owner.(y).(x) >= 0 && starved owner.(y).(x) then lit.(y).(x) <- true
         done
       done;
+      (* A sliver can contain no dot centre; lend it the dot closest to its
+         mid-angle ray, taken from a neighbour that keeps at least one. *)
+      if radius >= 2 then
+        for slice = 0 to slice_count - 1 do
+          if is_non_empty.(slice) && sector_dots.(slice) = 0 then begin
+            let start = if slice = 0 then 0. else slice_ends.(slice - 1) in
+            let mid = (start +. slice_ends.(slice)) /. 2. *. two_pi in
+            let best = ref None in
+            for y = 0 to height - 1 do
+              for x = 0 to width - 1 do
+                let donor = owner.(y).(x) in
+                if donor >= 0 && (lit_dots.(donor) > 1 || not lit.(y).(x)) then begin
+                  let dx = float_of_int x +. 0.5 -. centre
+                  and dy = float_of_int y +. 0.5 -. centre in
+                  let distance = Float.sqrt ((dx *. dx) +. (dy *. dy)) in
+                  let alignment = ((dx *. sin mid) -. (dy *. cos mid)) /. distance in
+                  match !best with
+                  | Some (a, d, _, _) when a > alignment || (a = alignment && d >= distance) -> ()
+                  | _ -> best := Some (alignment, distance, x, y)
+                end
+              done
+            done;
+            match !best with
+            | None -> ()
+            | Some (_, _, x, y) ->
+              let donor = owner.(y).(x) in
+              if lit.(y).(x) then lit_dots.(donor) <- lit_dots.(donor) - 1;
+              sector_dots.(donor) <- sector_dots.(donor) - 1;
+              owner.(y).(x) <- slice;
+              lit.(y).(x) <- true;
+              sector_dots.(slice) <- 1;
+              lit_dots.(slice) <- 1
+          end
+        done;
       for row = 0 to rows - 1 do
         for col = 0 to cols - 1 do
           let mask = ref 0 in
@@ -132,6 +169,26 @@ let cells ~radius weights =
               Some { glyph = Uchar.of_int (braille_base + !mask); slice = !winner }
           end
         done
+      done;
+      (* A minority dot loses its cell's vote; give its slice that cell. *)
+      let shown slice =
+        Array.exists
+          (Array.exists (function Some c -> c.slice = slice | None -> false))
+          result
+      in
+      for slice = 0 to slice_count - 1 do
+        if is_non_empty.(slice) && not (shown slice) then begin
+          let placed = ref false in
+          for y = 0 to height - 1 do
+            for x = 0 to width - 1 do
+              if (not !placed) && lit.(y).(x) && owner.(y).(x) = slice then begin
+                placed := true;
+                result.(y / 4).(x / 2) <-
+                  Option.map (fun c -> { c with slice }) result.(y / 4).(x / 2)
+              end
+            done
+          done
+        end
       done;
       result
     end

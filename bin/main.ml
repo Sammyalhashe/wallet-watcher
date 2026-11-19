@@ -1,11 +1,16 @@
 let () =
-  let path = if Array.length Sys.argv > 1 then Sys.argv.(1) else Wallet_watcher.Config.default_path () in
-  match Wallet_watcher.Config.load path with
+  let path = ref "" in
+  match
+    path :=
+      (if Array.length Sys.argv > 1 then Sys.argv.(1)
+       else Wallet_watcher.Config.default_path ());
+    Wallet_watcher.Config.load !path
+  with
   | exception Wallet_watcher.Config.Parse_error msg ->
     prerr_endline ("config: " ^ msg);
     exit 1
   | [] ->
-    prerr_endline ("config: " ^ path ^ " contains no wallets");
+    prerr_endline ("config: " ^ !path ^ " contains no wallets");
     exit 1
   | wallets ->
     Printf.printf "Fetching %d wallets...%!" (List.length wallets);

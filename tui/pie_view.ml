@@ -8,34 +8,26 @@ let breadcrumb = function
   | Nav.Root_by_coin -> "NET WORTH > by coin"
   | Nav.Root_by_wallet -> "NET WORTH > by wallet"
   | Nav.Coin asset -> Printf.sprintf "NET WORTH > %s by wallet" (Config.string_of_asset asset)
-  | Nav.Wallet label -> Printf.sprintf "NET WORTH > %s by coin" label
+  | Nav.Wallet label -> Printf.sprintf "NET WORTH > %s by coin" (Format.sanitize label)
 
-let pie_rows radius = ((2 * radius) + 3) / 4
-let pie_cols radius = ((2 * radius) + 1) / 2
-
-let pie_radius (width, height) ~chrome =
+let pie_radius (width, height) ~chrome ~legend_width =
   let rows_available = height - chrome in
-  max 8 (min 16 (min (2 * rows_available) (width - 50)))
+  max 8 (min 16 (min (2 * rows_available) (width - legend_width - 4)))
 
-(* An empty or short grid (no Pie implementation yet) renders as blanks. *)
 let pie_image radius slices =
   let weights =
     List.map (fun (s : Portfolio.slice) -> Option.value s.pct ~default:0.) slices
   in
   let grid = Pie.cells ~radius weights in
   let cell row col =
-    let lit =
-      if row < Array.length grid && col < Array.length grid.(row) then grid.(row).(col)
-      else None
-    in
-    match lit with
+    match grid.(row).(col) with
     | Some (c : Pie.cell) ->
       I.uchar series_attrs.(c.slice mod Array.length series_attrs) c.glyph 1 1
     | None -> I.void 1 1
   in
   I.vcat
-    (List.init (pie_rows radius) (fun row ->
-         I.hcat (List.init (pie_cols radius) (cell row))))
+    (List.init (Pie.rows ~radius) (fun row ->
+         I.hcat (List.init (Pie.cols ~radius) (cell row))))
 
 let legend_row ~selected ~widths:(name_w, pct_w, amount_w, usd_w) i (s : Portfolio.slice) =
   let styled attr text =
@@ -59,6 +51,9 @@ let legend_row ~selected ~widths:(name_w, pct_w, amount_w, usd_w) i (s : Portfol
       styled A.empty " " ]
 
 let legend_image ~selected slices =
+  let slices =
+    List.map (fun (s : Portfolio.slice) -> { s with name = Format.truncate 20 s.name }) slices
+  in
   let widest f = List.fold_left (fun acc s -> max acc (String.length (f s))) 0 slices in
   let widths =
     ( min 20 (widest (fun (s : Portfolio.slice) -> s.name)),
@@ -69,19 +64,23 @@ let legend_image ~selected slices =
       widest (fun (s : Portfolio.slice) ->
           match s.usd with Some v -> Format.fmt_usd v | None -> "-") )
   in
-  let truncated =
-    List.map (fun (s : Portfolio.slice) -> { s with name = Format.truncate 20 s.name }) slices
-  in
-  I.vcat (List.mapi (fun i s -> legend_row ~selected:(i = selected) ~widths i s) truncated)
+  I.vcat (List.mapi (fun i s -> legend_row ~selected:(i = selected) ~widths i s) slices)
+
+let has_weights slices =
+  List.exists
+    (fun (s : Portfolio.slice) -> match s.pct with Some p -> p > 0. | None -> false)
+    slices
 
 let render_pie state p size ~chrome =
   let slices = Nav.rows p state.Nav.focus in
   let crumb = I.string a_header (breadcrumb state.Nav.focus) in
   if slices = [] then I.vcat [ crumb; I.void 1 1; I.string a_dim "  nothing to show" ]
   else begin
-    let radius = pie_radius size ~chrome in
-    I.vcat
-      [ crumb;
-        I.void 1 1;
-        I.hcat [ pie_image radius slices; I.void 3 1; legend_image ~selected:state.Nav.selected slices ] ]
+    let legend = legend_image ~selected:state.Nav.selected slices in
+    if not (has_weights slices) then
+      I.vcat [ crumb; I.void 1 1; legend; I.void 1 1; I.string a_dim "  prices unavailable" ]
+    else begin
+      let radius = pie_radius size ~chrome ~legend_width:(I.width legend) in
+      I.vcat [ crumb; I.void 1 1; I.hcat [ pie_image radius slices; I.void 3 1; legend ] ]
+    end
   end

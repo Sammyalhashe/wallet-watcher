@@ -62,11 +62,15 @@ let fetch_bridged_weth address =
          ~params:[ call; `String "latest" ])
       (parse_erc20_balance ~decimals:18)
 
+(* WETH.e is a secondary leg: its failure must not discard the AVAX balance. *)
+let combine_avalanche native weth =
+  let* avax = native in
+  match weth with
+  | Ok eth -> Ok [ (Config.AVAX, avax); (Config.ETH, eth) ]
+  | Error _ -> Ok [ (Config.AVAX, avax) ]
+
 let fetch_avalanche address =
   Lwt.both
     (get_native_balance ~label:("AVAX " ^ address) ~url:avalanche_rpc_url address)
     (fetch_bridged_weth address)
-  >|= fun (native, weth) ->
-  let* avax = native in
-  let* eth = weth in
-  Ok [ (Config.AVAX, avax); (Config.ETH, eth) ]
+  >|= fun (native, weth) -> combine_avalanche native weth

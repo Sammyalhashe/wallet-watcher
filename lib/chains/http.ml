@@ -4,7 +4,7 @@ open Lwt.Infix
 open Json
 
 let timeout_s = 20.0
-let user_agent = "portfolio-tui/0.1"
+let user_agent = "wallet-watcher/0.2"
 
 let headers =
   Cohttp.Header.of_list
@@ -14,31 +14,32 @@ let with_timeout label thread =
   Lwt.pick
     [ thread; (Lwt_unix.sleep timeout_s >|= fun () -> Error (label ^ ": timed out")) ]
 
+let error_message label code body =
+  (* Some gateways answer errors with a full HTML page. *)
+  let snippet = String.sub body 0 (min 120 (String.length body)) in
+  Printf.sprintf "%s: HTTP %d %s" label code (single_line snippet)
+
 let read_response label (resp, body) =
   Cohttp_lwt.Body.to_string body >|= fun body ->
   let code = Cohttp.Code.code_of_status (Cohttp.Response.status resp) in
-  if code >= 200 && code < 300 then Ok body
-  else
-    (* Some gateways answer errors with a full HTML page. *)
-    let snippet = String.sub body 0 (min 120 (String.length body)) in
-    Error (Printf.sprintf "%s: HTTP %d %s" label code snippet)
+  if code >= 200 && code < 300 then Ok body else Error (error_message label code body)
 
-let guard label thread =
+let guard label request =
   Lwt.catch
-    (fun () -> thread)
+    request
     (fun exn -> Lwt.return (Error (Printf.sprintf "%s: %s" label (Printexc.to_string exn))))
 
 let get ?(label = "GET") url =
   with_timeout label
-  @@ guard label
-       (Cohttp_lwt_unix.Client.get ~headers (Uri.of_string url)
+  @@ guard label (fun () ->
+       Cohttp_lwt_unix.Client.get ~headers (Uri.of_string url)
        >>= read_response label)
 
 let post_json ?(label = "POST") url payload =
   let body = Cohttp_lwt.Body.of_string (Yojson.Basic.to_string payload) in
   with_timeout label
-  @@ guard label
-       (Cohttp_lwt_unix.Client.post ~headers ~body (Uri.of_string url)
+  @@ guard label (fun () ->
+       Cohttp_lwt_unix.Client.post ~headers ~body (Uri.of_string url)
        >>= read_response label)
 
 let fetch_json ~label thread extract =

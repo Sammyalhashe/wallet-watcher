@@ -148,7 +148,36 @@ let test_zec () =
      | Error "ZEC: shielded addresses are not supported" -> true
      | _ -> false)
 
+let test_avalanche_combine () =
+  let both = Evm.combine_avalanche (Ok 2.) (Ok 3.) in
+  check "both legs give AVAX and ETH"
+    (both = Ok [ (Config.AVAX, 2.); (Config.ETH, 3.) ]);
+  check "failed WETH leg keeps AVAX"
+    (Evm.combine_avalanche (Ok 2.) (Error "boom") = Ok [ (Config.AVAX, 2.) ]);
+  check_error "failed AVAX leg fails the result"
+    (Evm.combine_avalanche (Error "boom") (Ok 3.));
+  check_error "both legs failing is an error"
+    (Evm.combine_avalanche (Error "a") (Error "b"))
+
+let test_single_line_errors () =
+  let single_line s = not (String.exists (fun c -> Char.code c < 0x20) s) in
+  (match Json.parse_json "{\n  \"a\": ,\n}" with
+   | Error e -> check "parse_json error is one line" (single_line e)
+   | Ok _ -> check "parse_json rejects bad input" false);
+  check "http error message is one line"
+    (single_line (Http.error_message "GET" 502 "<html>\r\n<body>\tBad\n"));
+  check_string "http error message keeps text" ~expect:"GET: HTTP 502 <html>  <body> Bad "
+    (Http.error_message "GET" 502 "<html>\r\n<body>\tBad\n");
+  let hit = ref false in
+  let result =
+    Lwt_main.run
+      (Http.guard "x" (fun () -> hit := true; failwith "sync"))
+  in
+  check "guard catches synchronous raise" (!hit && Result.is_error result)
+
 let () =
+  test_avalanche_combine ();
+  test_single_line_errors ();
   test_hex ();
   test_eth ();
   test_sol ();
