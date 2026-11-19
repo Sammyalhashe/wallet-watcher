@@ -2,7 +2,7 @@
 
 open Lwt.Infix
 
-let fetch_network : Config.network -> string -> _ = function
+let fetch_network : Config.network -> string -> Snapshot.fetch_result Lwt.t = function
   | Config.Ethereum -> Evm.fetch_ethereum
   | Config.Base -> Evm.fetch_base
   | Config.Avalanche -> Evm.fetch_avalanche
