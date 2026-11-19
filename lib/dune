@@ -1,3 +1,5 @@
+(include_subdirs unqualified)
+
 (library
  (name wallet_watcher)
  (public_name wallet_watcher)

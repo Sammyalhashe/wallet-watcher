@@ -2,7 +2,8 @@
    without a terminal, a network or real balances. *)
 
 open Wallet_watcher
-module Tui = Wallet_watcher_tui.Tui
+module Nav = Wallet_watcher_tui.Nav
+module Screen = Wallet_watcher_tui.Screen
 
 let balance wallet network address result : Snapshot.balance =
   { wallet; network; address; result }
@@ -47,10 +48,10 @@ let () =
   let portfolio = Portfolio.of_snapshot snapshot in
   let show state =
     Notty_unix.output_image ~cap:Notty.Cap.dumb
-      (Tui.render state portfolio (width, 40));
+      (Screen.render state portfolio (width, 40));
     print_newline ()
   in
   List.iter show
-    [ { Tui.initial with view = Tui.Table };
-      { Tui.initial with view = Tui.Pie };
-      { Tui.view = Tui.Pie; focus = Tui.Coin Config.BTC; selected = 0 } ]
+    [ { Nav.initial with view = Nav.Table };
+      { Nav.initial with view = Nav.Pie };
+      { Nav.view = Nav.Pie; focus = Nav.Coin Config.BTC; selected = 0 } ]

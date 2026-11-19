@@ -1,7 +1,9 @@
 (* Pure layers: snapshot flattening, the four aggregations, navigation, formatting. *)
 
 open Wallet_watcher
-module Tui = Wallet_watcher_tui.Tui
+module Format = Wallet_watcher_tui.Format
+module Nav = Wallet_watcher_tui.Nav
+module Pie_view = Wallet_watcher_tui.Pie_view
 
 let failures = ref 0
 let passes = ref 0
@@ -173,41 +175,41 @@ let test_table () =
 (* {1 Navigation} *)
 
 let nav_portfolio = Portfolio.of_snapshot two_wallets
-let pie_at focus selected = { Tui.view = Tui.Pie; focus; selected }
-let step state event = Option.get (Tui.step nav_portfolio state event)
+let pie_at focus selected = { Nav.view = Nav.Pie; focus; selected }
+let step state event = Option.get (Nav.step nav_portfolio state event)
 
 let test_navigation () =
   print_endline "navigation";
-  let root = pie_at Tui.Root_by_coin 0 in
-  check "initial view is the table" (Tui.initial.view = Tui.Table);
-  check "c toggles view" ((step Tui.initial Tui.Toggle_view).view = Tui.Pie);
-  check "quit ends the loop" (Tui.step nav_portfolio root Tui.Quit = None);
-  check "move down" ((step root (Tui.Move 1)).selected = 1);
-  check "move clamps at top" ((step root (Tui.Move (-1))).selected = 0);
-  check "move clamps at bottom" ((step root (Tui.Move 10)).selected = 2);
+  let root = pie_at Nav.Root_by_coin 0 in
+  check "initial view is the table" (Nav.initial.view = Nav.Table);
+  check "c toggles view" ((step Nav.initial Nav.Toggle_view).view = Nav.Pie);
+  check "quit ends the loop" (Nav.step nav_portfolio root Nav.Quit = None);
+  check "move down" ((step root (Nav.Move 1)).selected = 1);
+  check "move clamps at top" ((step root (Nav.Move (-1))).selected = 0);
+  check "move clamps at bottom" ((step root (Nav.Move 10)).selected = 2);
   check "moves ignored in table"
-    ((step { root with view = Tui.Table } (Tui.Move 1)).selected = 0);
-  check "drill coin row" ((step root Tui.Drill).focus = Tui.Coin Config.BTC);
-  check "drill resets selection" ((step (pie_at Tui.Root_by_coin 1) Tui.Drill).selected = 0);
+    ((step { root with view = Nav.Table } (Nav.Move 1)).selected = 0);
+  check "drill coin row" ((step root Nav.Drill).focus = Nav.Coin Config.BTC);
+  check "drill resets selection" ((step (pie_at Nav.Root_by_coin 1) Nav.Drill).selected = 0);
   check "drill second coin"
-    ((step (pie_at Tui.Root_by_coin 1) Tui.Drill).focus = Tui.Coin Config.ETH);
-  check "tab at root switches" ((step root Tui.Switch_root).focus = Tui.Root_by_wallet);
+    ((step (pie_at Nav.Root_by_coin 1) Nav.Drill).focus = Nav.Coin Config.ETH);
+  check "tab at root switches" ((step root Nav.Switch_root).focus = Nav.Root_by_wallet);
   check "tab twice returns"
-    ((step (step root Tui.Switch_root) Tui.Switch_root).focus = Tui.Root_by_coin);
+    ((step (step root Nav.Switch_root) Nav.Switch_root).focus = Nav.Root_by_coin);
   check "drill wallet row"
-    ((step (pie_at Tui.Root_by_wallet 0) Tui.Drill).focus = Tui.Wallet "A");
+    ((step (pie_at Nav.Root_by_wallet 0) Nav.Drill).focus = Nav.Wallet "A");
   check "tab is a no-op when drilled"
-    ((step (pie_at (Tui.Coin Config.BTC) 0) Tui.Switch_root).focus = Tui.Coin Config.BTC);
+    ((step (pie_at (Nav.Coin Config.BTC) 0) Nav.Switch_root).focus = Nav.Coin Config.BTC);
   check "drill is a no-op on a leaf"
-    ((step (pie_at (Tui.Coin Config.ETH) 0) Tui.Drill).focus = Tui.Coin Config.ETH);
-  let back = step (pie_at (Tui.Coin Config.ETH) 0) Tui.Up in
-  check "up from coin returns to coin root" (back.focus = Tui.Root_by_coin);
+    ((step (pie_at (Nav.Coin Config.ETH) 0) Nav.Drill).focus = Nav.Coin Config.ETH);
+  let back = step (pie_at (Nav.Coin Config.ETH) 0) Nav.Up in
+  check "up from coin returns to coin root" (back.focus = Nav.Root_by_coin);
   check "up restores the drilled row" (back.selected = 1);
   check "up from wallet returns to wallet root"
-    ((step (pie_at (Tui.Wallet "B") 0) Tui.Up).focus = Tui.Root_by_wallet);
-  check "up at root is a no-op" (step root Tui.Up = root);
+    ((step (pie_at (Nav.Wallet "B") 0) Nav.Up).focus = Nav.Root_by_wallet);
+  check "up at root is a no-op" (step root Nav.Up = root);
   check "toggle keeps focus"
-    ((step (pie_at (Tui.Coin Config.BTC) 1) Tui.Toggle_view).focus = Tui.Coin Config.BTC)
+    ((step (pie_at (Nav.Coin Config.BTC) 1) Nav.Toggle_view).focus = Nav.Coin Config.BTC)
 
 let test_other_not_drillable () =
   print_endline "folded Other row";
@@ -216,52 +218,52 @@ let test_other_not_drillable () =
         balance (Printf.sprintf "W%d" i) Config.Bitcoin (Ok [ (Config.BTC, float_of_int (10 - i)) ]))
   in
   let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.BTC, 1.) ] many) in
-  let rows = Tui.rows p Tui.Root_by_wallet in
+  let rows = Nav.rows p Nav.Root_by_wallet in
   check "folds to palette size" (List.length rows = 8);
   check_string "last row is Other" ~expect:"Other (3)" (List.nth rows 7).name;
-  let state = pie_at Tui.Root_by_wallet 7 in
-  check "Other does not drill" (Tui.step p state Tui.Drill = Some state);
+  let state = pie_at Nav.Root_by_wallet 7 in
+  check "Other does not drill" (Nav.step p state Nav.Drill = Some state);
   check_float "folded pcts still sum to 100" ~expect:100. (pct_sum rows)
 
 let test_key_mapping () =
   print_endline "key mapping";
   let key k = `Key (k, []) in
-  check "q quits" (Tui.event_of_input (key (`ASCII 'q')) = Some Tui.Quit);
-  check "ctrl-c quits" (Tui.event_of_input (`Key (`ASCII 'C', [ `Ctrl ])) = Some Tui.Quit);
-  check "c toggles" (Tui.event_of_input (key (`ASCII 'c')) = Some Tui.Toggle_view);
-  check "j moves down" (Tui.event_of_input (key (`ASCII 'j')) = Some (Tui.Move 1));
-  check "up arrow moves up" (Tui.event_of_input (key (`Arrow `Up)) = Some (Tui.Move (-1)));
-  check "enter drills" (Tui.event_of_input (key `Enter) = Some Tui.Drill);
-  check "l drills" (Tui.event_of_input (key (`ASCII 'l')) = Some Tui.Drill);
-  check "backspace goes up" (Tui.event_of_input (key `Backspace) = Some Tui.Up);
-  check "escape goes up" (Tui.event_of_input (key `Escape) = Some Tui.Up);
-  check "tab switches" (Tui.event_of_input (key `Tab) = Some Tui.Switch_root);
-  check "other keys ignored" (Tui.event_of_input (key (`ASCII 'z')) = None)
+  check "q quits" (Nav.event_of_input (key (`ASCII 'q')) = Some Nav.Quit);
+  check "ctrl-c quits" (Nav.event_of_input (`Key (`ASCII 'C', [ `Ctrl ])) = Some Nav.Quit);
+  check "c toggles" (Nav.event_of_input (key (`ASCII 'c')) = Some Nav.Toggle_view);
+  check "j moves down" (Nav.event_of_input (key (`ASCII 'j')) = Some (Nav.Move 1));
+  check "up arrow moves up" (Nav.event_of_input (key (`Arrow `Up)) = Some (Nav.Move (-1)));
+  check "enter drills" (Nav.event_of_input (key `Enter) = Some Nav.Drill);
+  check "l drills" (Nav.event_of_input (key (`ASCII 'l')) = Some Nav.Drill);
+  check "backspace goes up" (Nav.event_of_input (key `Backspace) = Some Nav.Up);
+  check "escape goes up" (Nav.event_of_input (key `Escape) = Some Nav.Up);
+  check "tab switches" (Nav.event_of_input (key `Tab) = Some Nav.Switch_root);
+  check "other keys ignored" (Nav.event_of_input (key (`ASCII 'z')) = None)
 
 (* {1 Formatting} *)
 
 let test_format () =
   print_endline "formatting";
-  check_string "cents" ~expect:"$0.50" (Tui.fmt_usd 0.5);
-  check_string "no grouping under 1000" ~expect:"$999.00" (Tui.fmt_usd 999.);
-  check_string "groups thousands" ~expect:"$1,000.00" (Tui.fmt_usd 1000.);
-  check_string "groups millions" ~expect:"$1,234,567.89" (Tui.fmt_usd 1234567.891);
-  check_string "groups billions" ~expect:"$1,000,000,000.00" (Tui.fmt_usd 1e9);
-  check_string "share" ~expect:"75.00%" (Tui.fmt_share 75.);
-  check_string "amount" ~expect:"1.500000" (Tui.fmt_amount 1.5);
+  check_string "cents" ~expect:"$0.50" (Format.fmt_usd 0.5);
+  check_string "no grouping under 1000" ~expect:"$999.00" (Format.fmt_usd 999.);
+  check_string "groups thousands" ~expect:"$1,000.00" (Format.fmt_usd 1000.);
+  check_string "groups millions" ~expect:"$1,234,567.89" (Format.fmt_usd 1234567.891);
+  check_string "groups billions" ~expect:"$1,000,000,000.00" (Format.fmt_usd 1e9);
+  check_string "share" ~expect:"75.00%" (Format.fmt_share 75.);
+  check_string "amount" ~expect:"1.500000" (Format.fmt_amount 1.5);
   check_string "short address" ~expect:"0xd8dA6BF2..A96045"
-    (Tui.short_address "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+    (Format.short_address "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
   check_string "short address leaves small ones alone" ~expect:"0xabc"
-    (Tui.short_address "0xabc");
-  check_string "pad left" ~expect:"ab   " (Tui.pad `Left 5 "ab");
-  check_string "pad right" ~expect:"   ab" (Tui.pad `Right 5 "ab");
-  check_string "pad leaves oversized alone" ~expect:"abcdef" (Tui.pad `Left 3 "abcdef");
-  check_string "truncate" ~expect:"abc.." (Tui.truncate 5 "abcdefgh");
-  check_string "breadcrumb root" ~expect:"NET WORTH > by coin" (Tui.breadcrumb Tui.Root_by_coin);
+    (Format.short_address "0xabc");
+  check_string "pad left" ~expect:"ab   " (Format.pad `Left 5 "ab");
+  check_string "pad right" ~expect:"   ab" (Format.pad `Right 5 "ab");
+  check_string "pad leaves oversized alone" ~expect:"abcdef" (Format.pad `Left 3 "abcdef");
+  check_string "truncate" ~expect:"abc.." (Format.truncate 5 "abcdefgh");
+  check_string "breadcrumb root" ~expect:"NET WORTH > by coin" (Pie_view.breadcrumb Nav.Root_by_coin);
   check_string "breadcrumb coin" ~expect:"NET WORTH > BTC by wallet"
-    (Tui.breadcrumb (Tui.Coin Config.BTC));
+    (Pie_view.breadcrumb (Nav.Coin Config.BTC));
   check_string "breadcrumb wallet" ~expect:"NET WORTH > Ledger by coin"
-    (Tui.breadcrumb (Tui.Wallet "Ledger"))
+    (Pie_view.breadcrumb (Nav.Wallet "Ledger"))
 
 let () =
   test_of_snapshot ();
