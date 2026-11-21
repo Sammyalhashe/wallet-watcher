@@ -67,6 +67,42 @@ let test_btc () =
   check_error "missing chain_stats"
     (Bitcoin.parse_balance (json {|{"address":"bc1q"}|}))
 
+let test_btc_descriptor () =
+  print_endline "BTC descriptors";
+  let multisig = "wsh(sortedmulti(2,[aa/48h/0h/0h/2h]xpubA/<0;1>/*,[bb/48h/0h/0h/2h]xpubB/<0;1>/*))" in
+  check "parenthesised value is a descriptor" (Bitcoin.is_descriptor multisig);
+  check "address is not a descriptor"
+    (not (Bitcoin.is_descriptor "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97"));
+  check "multipath expands into receive and change, every key"
+    (Bitcoin.expand_multipath (multisig ^ "#abcd1234")
+     = [ "wsh(sortedmulti(2,[aa/48h/0h/0h/2h]xpubA/0/*,[bb/48h/0h/0h/2h]xpubB/0/*))";
+         "wsh(sortedmulti(2,[aa/48h/0h/0h/2h]xpubA/1/*,[bb/48h/0h/0h/2h]xpubB/1/*))" ]);
+  check "single-path descriptor keeps its checksum"
+    (Bitcoin.expand_multipath "wpkh(xpubA/0/*)#abcd1234" = [ "wpkh(xpubA/0/*)#abcd1234" ]);
+  check "range only for wildcard descriptors"
+    (Bitcoin.scan_params [ "wpkh(xpubA/0/*)"; "addr(bc1q)" ]
+     = [ `String "start";
+         `List [ `Assoc [ ("desc", `String "wpkh(xpubA/0/*)"); ("range", `Int 1000) ];
+                 `Assoc [ ("desc", `String "addr(bc1q)") ] ] ]);
+  check_ok_float "scan total_amount" ~expect:0.5123
+    (Bitcoin.parse_scan
+       (json
+          {|{"result":{"success":true,"txouts":9000000,"height":870000,"bestblock":"00ab",
+             "unspents":[{"txid":"aa","vout":0,"amount":0.5,"height":1},
+                         {"txid":"bb","vout":1,"amount":0.0123,"height":2}],
+             "total_amount":0.51230000},"error":null,"id":1}|}));
+  check_error "scan in progress is an error"
+    (Bitcoin.parse_scan
+       (json
+          {|{"result":null,"error":{"code":-8,"message":"Scan already in progress, use action \"abort\" or \"status\""},"id":1}|}));
+  check_error "aborted scan is an error"
+    (Bitcoin.parse_scan (json {|{"result":{"success":false},"error":null,"id":1}|}));
+  Unix.putenv "BITCOIND_RPC_URL" "";
+  check "missing credentials fail without a request"
+    (match Lwt_main.run (Bitcoin.fetch_descriptor multisig) with
+     | Error e -> String.starts_with ~prefix:"BTC: set BITCOIND_RPC_URL" e
+     | Ok _ -> false)
+
 let test_sui () =
   print_endline "SUI decoder";
   (* Only the native coin type counts; the USDC row must be ignored. *)
@@ -192,6 +228,7 @@ let () =
   test_rpc_result ();
   test_sol ();
   test_btc ();
+  test_btc_descriptor ();
   test_sui ();
   test_tao ();
   test_calldata ();
