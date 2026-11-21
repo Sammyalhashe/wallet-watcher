@@ -103,6 +103,69 @@ let test_btc_descriptor () =
      | Error e -> String.starts_with ~prefix:"BTC: set BITCOIND_RPC_URL" e
      | Ok _ -> false)
 
+let zerion_item ~id ~kind ?protocol ?(displayable = true) ~symbol ~amount ~value () =
+  Printf.sprintf
+    {|{"type":"positions","id":"%s-%s","attributes":{"parent":null,"protocol":%s,
+       "name":"%s","position_type":"%s",
+       "quantity":{"int":"0","decimals":18,"float":%s,"numeric":"%s"},
+       "value":%s,"price":1.0,"changes":null,
+       "fungible_info":{"name":"%s","symbol":"%s","icon":null,"flags":{"verified":true}},
+       "flags":{"displayable":%b,"is_trash":false}},
+       "relationships":{"chain":{"data":{"type":"chains","id":"base"}},
+                        "fungible":{"data":{"type":"fungibles","id":"%s"}}}}|}
+    id kind
+    (match protocol with Some p -> Printf.sprintf "%S" p | None -> "null")
+    symbol kind amount amount value symbol symbol displayable id
+
+let test_zerion () =
+  print_endline "Zerion positions";
+  let payload =
+    json
+      ({|{"links":{"self":"x"},"data":[|}
+       ^ String.concat ","
+           [ zerion_item ~id:"eth" ~kind:"wallet" ~symbol:"ETH" ~amount:"1.5" ~value:"4500.0" ();
+             zerion_item ~id:"usdc" ~kind:"wallet" ~symbol:"USDC" ~amount:"1000" ~value:"1000" ();
+             zerion_item ~id:"usdc" ~kind:"deposit" ~protocol:"Aave V3" ~symbol:"USDC"
+               ~amount:"1000" ~value:"1000" ();
+             zerion_item ~id:"usdt" ~kind:"loan" ~protocol:"Aave V3" ~symbol:"USDT"
+               ~amount:"200" ~value:"200.5" ();
+             zerion_item ~id:"spam" ~kind:"wallet" ~displayable:false ~symbol:"SCAM"
+               ~amount:"1" ~value:"99999" ();
+             zerion_item ~id:"shib" ~kind:"wallet" ~symbol:"shib" ~amount:"1000" ~value:"0.3" ();
+             zerion_item ~id:"steth" ~kind:"staked" ~symbol:"stETH" ~amount:"2" ~value:"null" () ]
+       ^ "]}")
+  in
+  match Zerion.parse_positions payload with
+  | Error e -> report "parse_positions" false e
+  | Ok holdings ->
+    let find_detail asset detail =
+      List.find_opt
+        (fun (h : Snapshot.holding) -> h.asset = asset && h.detail = detail)
+        holdings
+    in
+    check "dust and spam are gone" (List.length holdings = 5);
+    (match find_detail "ETH" None with
+     | Some h -> check "wallet ETH is self-valued" (h.amount = 1.5 && h.usd = Some 4500.)
+     | None -> report "wallet ETH kept" false "missing");
+    check "wallet USDC kept beside an Aave USDC deposit" (find_detail "USDC" None <> None);
+    check "deposit keeps protocol detail" (find_detail "USDC" (Some "Aave V3 deposit") <> None);
+    (match find_detail "USDT" (Some "Aave V3 loan") with
+     | Some h -> check "loan negated" (h.amount = -200. && h.usd = Some (-200.5))
+     | None -> report "loan kept" false "missing");
+    check "non-displayable skipped"
+      (not (List.exists (fun (h : Snapshot.holding) -> h.asset = "SCAM") holdings));
+    check "dust dropped"
+      (not (List.exists (fun (h : Snapshot.holding) -> h.asset = "SHIB") holdings));
+    (match find_detail "STETH" (Some "staked") with
+     | Some h -> check "unvalued position kept unpriced, symbol upper-cased" (h.usd = None)
+     | None -> report "unvalued position kept" false "missing");
+    check_error "missing data is an error" (Zerion.parse_positions (json {|{"errors":[]}|}));
+    check_error "malformed position is an error"
+      (Zerion.parse_positions (json {|{"data":[{"attributes":{"position_type":"wallet"}}]}|}));
+    check_string "positions url"
+      ~expect:"https://api.zerion.io/v1/wallets/0xabc/positions/?filter%5Bpositions%5D=no_filter&filter%5Bchain_ids%5D=base&filter%5Btrash%5D=only_non_trash&currency=usd"
+      (Zerion.positions_url ~chain:"base" "0xabc")
+
 let test_sui () =
   print_endline "SUI decoder";
   (* Only the native coin type counts; the USDC row must be ignored. *)
@@ -233,6 +296,7 @@ let () =
   test_tao ();
   test_calldata ();
   test_erc20 ();
+  test_zerion ();
   test_zec ();
   test_prices ();
   summary ()

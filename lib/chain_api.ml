@@ -2,10 +2,16 @@
 
 open Lwt.Infix
 
+(* Without a Zerion key, EVM networks fall back to native balances only. *)
+let zerion_or native network address =
+  match Sys.getenv_opt "ZERION_API_KEY" with
+  | None | Some "" -> native address
+  | Some key -> Zerion.fetch ~key ~chain:(Config.string_of_network network) address
+
 let fetch_network : Config.network -> string -> Snapshot.fetch_result Lwt.t = function
-  | Config.Ethereum -> Evm.fetch_ethereum
-  | Config.Base -> Evm.fetch_base
-  | Config.Avalanche -> Evm.fetch_avalanche
+  | Config.Ethereum -> zerion_or Evm.fetch_ethereum Config.Ethereum
+  | Config.Base -> zerion_or Evm.fetch_base Config.Base
+  | Config.Avalanche -> zerion_or Evm.fetch_avalanche Config.Avalanche
   | Config.Bitcoin -> Bitcoin.fetch
   | Config.Solana -> Solana.fetch
   | Config.Sui -> Sui.fetch
