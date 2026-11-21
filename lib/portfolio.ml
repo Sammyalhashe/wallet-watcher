@@ -6,6 +6,8 @@ type position = {
   network : Config.network;
   asset : Config.asset;
   amount : float;
+  usd : float option;  (* the source's own valuation, preferred over the price *)
+  detail : string option;
   address : string;
 }
 
@@ -38,7 +40,9 @@ type slice = {
 let price_of t asset = List.assoc_opt asset t.prices
 
 let usd_of_position prices (p : position) =
-  Option.map (fun price -> p.amount *. price) (List.assoc_opt p.asset prices)
+  match p.usd with
+  | Some usd -> Some usd
+  | None -> Option.map (fun price -> p.amount *. price) (List.assoc_opt p.asset prices)
 
 (* None when nothing is known, so "unpriced" never collapses into zero. *)
 let sum_known values =
@@ -74,8 +78,9 @@ let of_snapshot (s : Snapshot.t) =
          | Ok holdings ->
            ( positions
              @ List.map
-                 (fun (asset, amount) ->
-                    { wallet = b.wallet; network = b.network; asset; amount;
+                 (fun (h : Snapshot.holding) ->
+                    { wallet = b.wallet; network = b.network; asset = h.asset;
+                      amount = h.amount; usd = h.usd; detail = h.detail;
                       address = b.address })
                  holdings,
              failures )
@@ -143,7 +148,7 @@ let with_pct_of_amount slices =
 let by_asset t =
   group_by (fun (p : position) -> p.asset) (held t)
   |> List.map (fun (asset, ps) ->
-       slice_of t ~name:(Config.string_of_asset asset) ~show_amount:true ps)
+       slice_of t ~name:asset ~show_amount:true ps)
   |> with_pct_of_usd
 
 let by_wallet t =
@@ -161,7 +166,7 @@ let wallet_by_asset t label =
   List.filter (fun (p : position) -> p.wallet = label) (held t)
   |> group_by (fun (p : position) -> p.asset)
   |> List.map (fun (asset, ps) ->
-       slice_of t ~name:(Config.string_of_asset asset) ~show_amount:true ps)
+       slice_of t ~name:asset ~show_amount:true ps)
   |> with_pct_of_usd
 
 (* Beyond [max_slices] the tail folds into one bucket instead of reusing a colour. *)
@@ -184,7 +189,7 @@ let fold ~max_slices (slices : slice list) : slice list =
 type row = {
   position : position;
   usd_value : float option;
-  share : float option;  (* of the asset's units, across all wallets *)
+  share : float option;  (* of the asset's held units, across all wallets; None for loans *)
 }
 
 type asset_block = {
@@ -200,13 +205,15 @@ let table t =
     (fun coin ->
        let mine = List.filter (fun (p : position) -> p.asset = coin) t.positions in
        let subtotal_amount = sum_amounts mine in
+       let held_amount = sum_amounts (List.filter (fun (p : position) -> p.amount > 0.) mine) in
        let rows =
          List.map
-           (fun p ->
+           (fun (p : position) ->
               { position = p;
                 usd_value = usd_of_position t.prices p;
                 share =
-                  (if subtotal_amount > 0. then Some (p.amount /. subtotal_amount *. 100.)
+                  (if p.amount >= 0. && held_amount > 0. then
+                     Some (p.amount /. held_amount *. 100.)
                    else None) })
            mine
        in

@@ -13,13 +13,13 @@ let fetch_network : Config.network -> string -> Snapshot.fetch_result Lwt.t = fu
   | Config.Bittensor -> Bittensor.fetch
 
 let assets_of_network : Config.network -> Config.asset list = function
-  | Config.Ethereum | Config.Base -> [ Config.ETH ]
-  | Config.Avalanche -> [ Config.AVAX; Config.ETH ]
-  | Config.Bitcoin -> [ Config.BTC ]
-  | Config.Solana -> [ Config.SOL ]
-  | Config.Sui -> [ Config.SUI ]
-  | Config.Zcash -> [ Config.ZEC ]
-  | Config.Bittensor -> [ Config.TAO ]
+  | Config.Ethereum | Config.Base -> [ Config.eth ]
+  | Config.Avalanche -> [ Config.avax; Config.eth ]
+  | Config.Bitcoin -> [ Config.btc ]
+  | Config.Solana -> [ Config.sol ]
+  | Config.Sui -> [ Config.sui ]
+  | Config.Zcash -> [ Config.zec ]
+  | Config.Bittensor -> [ Config.tao ]
 
 let distinct_assets wallets =
   List.concat_map

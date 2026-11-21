@@ -7,7 +7,7 @@ open Palette
 let breadcrumb = function
   | Nav.Root_by_coin -> "NET WORTH > by coin"
   | Nav.Root_by_wallet -> "NET WORTH > by wallet"
-  | Nav.Coin asset -> Printf.sprintf "NET WORTH > %s by wallet" (Config.string_of_asset asset)
+  | Nav.Coin asset -> Printf.sprintf "NET WORTH > %s by wallet" (Format.sanitize asset)
   | Nav.Wallet label -> Printf.sprintf "NET WORTH > %s by coin" (Format.sanitize label)
 
 let pie_radius (width, height) ~chrome ~legend_width =

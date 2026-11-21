@@ -24,8 +24,9 @@ let () =
   check_string "label" ~expect:"Ledger" ledger.label;
   check "networks parsed case-insensitively"
     (List.map fst ledger.addresses = [ Config.Bitcoin; Config.Base; Config.Avalanche ]);
-  check_string "coingecko AVAX" ~expect:"avalanche-2" (Config.coingecko_id Config.AVAX);
-  check_string "coingecko ZEC" ~expect:"zcash" (Config.coingecko_id Config.ZEC);
+  check "coingecko AVAX" (Config.coingecko_id Config.avax = Some "avalanche-2");
+  check "coingecko ZEC" (Config.coingecko_id Config.zec = Some "zcash");
+  check "no coingecko id for a token" (Config.coingecko_id "USDC" = None);
   check "network round-trips"
     (List.for_all
        (fun n -> Config.network_of_string (Config.string_of_network n) = n)

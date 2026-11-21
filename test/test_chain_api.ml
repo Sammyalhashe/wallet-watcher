@@ -29,6 +29,15 @@ let test_eth () =
        (json {|{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"bad address"}}|}));
   check_error "missing result" (Evm.parse_native_balance (json {|{"jsonrpc":"2.0"}|}))
 
+let test_rpc_result () =
+  print_endline "rpc_result";
+  check "bitcoind's null error is success"
+    (Http.rpc_result (json {|{"result":{"height":1},"error":null,"id":1}|})
+     = Ok (json {|{"height":1}|}));
+  check_error "non-null error fails"
+    (Http.rpc_result (json {|{"result":null,"error":{"code":-8,"message":"Scan already in progress"},"id":1}|}));
+  check_error "null error without result fails" (Http.rpc_result (json {|{"error":null,"id":1}|}))
+
 let test_sol () =
   print_endline "SOL decoder";
   check_ok_float "lamports -> SOL" ~expect:1.23456789
@@ -92,16 +101,16 @@ let test_prices () =
          "avalanche-2":{"usd":30.5},"zcash":{"usd":45}}|}
   in
   match
-    Prices.parse Config.[ ETH; BTC; SUI; AVAX; ZEC ] payload
+    Prices.parse Config.[ eth; btc; sui; avax; zec ] payload
   with
   | Error e -> report "parse_prices" false e
   | Ok prices ->
     check "prices: SUI absent, four found" (List.length prices = 4);
-    check_float "ETH price" ~expect:3000.5 (List.assoc Config.ETH prices);
-    check_float "BTC price" ~expect:65000. (List.assoc Config.BTC prices);
-    check_float "AVAX price" ~expect:30.5 (List.assoc Config.AVAX prices);
-    check_float "ZEC price" ~expect:45. (List.assoc Config.ZEC prices);
-    check "SUI omitted" (List.assoc_opt Config.SUI prices = None)
+    check_float "ETH price" ~expect:3000.5 (List.assoc Config.eth prices);
+    check_float "BTC price" ~expect:65000. (List.assoc Config.btc prices);
+    check_float "AVAX price" ~expect:30.5 (List.assoc Config.avax prices);
+    check_float "ZEC price" ~expect:45. (List.assoc Config.zec prices);
+    check "SUI omitted" (List.assoc_opt Config.sui prices = None)
 
 let vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 
@@ -151,9 +160,9 @@ let test_zec () =
 let test_avalanche_combine () =
   let both = Evm.combine_avalanche (Ok 2.) (Ok 3.) in
   check "both legs give AVAX and ETH"
-    (both = Ok [ (Config.AVAX, 2.); (Config.ETH, 3.) ]);
+    (both = Ok [ (Snapshot.holding Config.avax 2.); (Snapshot.holding Config.eth 3.) ]);
   check "failed WETH leg keeps AVAX"
-    (Evm.combine_avalanche (Ok 2.) (Error "boom") = Ok [ (Config.AVAX, 2.) ]);
+    (Evm.combine_avalanche (Ok 2.) (Error "boom") = Ok [ (Snapshot.holding Config.avax 2.) ]);
   check_error "failed AVAX leg fails the result"
     (Evm.combine_avalanche (Error "boom") (Ok 3.));
   check_error "both legs failing is an error"
@@ -180,6 +189,7 @@ let () =
   test_single_line_errors ();
   test_hex ();
   test_eth ();
+  test_rpc_result ();
   test_sol ();
   test_btc ();
   test_sui ();

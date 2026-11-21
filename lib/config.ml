@@ -2,7 +2,8 @@
    network. A network is where a balance is read; an asset is what is held. *)
 
 type network = Bitcoin | Ethereum | Base | Avalanche | Solana | Sui | Zcash | Bittensor
-type asset = BTC | ETH | AVAX | SOL | SUI | ZEC | TAO
+(* The upper-case symbol, so one coin merges across networks and sources. *)
+type asset = string
 
 type wallet = {
   label : string;
@@ -33,23 +34,19 @@ let network_of_string s =
     fail "unknown network %S (expected one of: %s)" s
       (String.concat ", " (List.map string_of_network all_networks))
 
-let string_of_asset = function
-  | BTC -> "BTC"
-  | ETH -> "ETH"
-  | AVAX -> "AVAX"
-  | SOL -> "SOL"
-  | SUI -> "SUI"
-  | ZEC -> "ZEC"
-  | TAO -> "TAO"
+let btc = "BTC"
+let eth = "ETH"
+let avax = "AVAX"
+let sol = "SOL"
+let sui = "SUI"
+let zec = "ZEC"
+let tao = "TAO"
 
-let coingecko_id = function
-  | BTC -> "bitcoin"
-  | ETH -> "ethereum"
-  | AVAX -> "avalanche-2"
-  | SOL -> "solana"
-  | SUI -> "sui"
-  | ZEC -> "zcash"
-  | TAO -> "bittensor"
+let coingecko_ids =
+  [ (btc, "bitcoin"); (eth, "ethereum"); (avax, "avalanche-2"); (sol, "solana");
+    (sui, "sui"); (zec, "zcash"); (tao, "bittensor") ]
+
+let coingecko_id asset = List.assoc_opt asset coingecko_ids
 
 let wallet_of_json = function
   | `Assoc fields ->

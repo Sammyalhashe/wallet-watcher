@@ -49,7 +49,7 @@ let selected_drillable_name p state =
 let drill_target p state =
   match (state.focus, selected_drillable_name p state) with
   | Root_by_coin, Some name ->
-    List.find_opt (fun a -> Config.string_of_asset a = name) (Portfolio.assets p)
+    List.find_opt (String.equal name) (Portfolio.assets p)
     |> Option.map (fun a -> Coin a)
   | Root_by_wallet, Some name ->
     List.find_opt (String.equal name) (Portfolio.wallets p)
@@ -78,7 +78,7 @@ let step p state = function
     | Root_by_coin | Root_by_wallet -> Some state
     | Coin asset ->
       Some { state with focus = Root_by_coin;
-                        selected = index_of_name p Root_by_coin (Config.string_of_asset asset) }
+                        selected = index_of_name p Root_by_coin asset }
     | Wallet label ->
       Some { state with focus = Root_by_wallet;
                         selected = index_of_name p Root_by_wallet label })

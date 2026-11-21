@@ -11,8 +11,11 @@ let position_row (r : Portfolio.row) =
   let p = r.position in
   let usd = match r.usd_value with Some v -> (Format.fmt_usd v, a_usd) | None -> ("-", a_dim) in
   let share = match r.share with Some s -> (Format.fmt_share s, a_share) | None -> ("-", a_dim) in
-  [| (Config.string_of_asset p.asset, a_dim);
-     (Config.string_of_network p.network, a_dim);
+  let network = Config.string_of_network p.network in
+  [| (Format.truncate 12 p.asset, a_dim);
+     ( Format.truncate 32
+         (match p.detail with Some d -> network ^ " - " ^ d | None -> network),
+       a_dim );
      (Format.truncate 18 p.wallet, a_label);
      (Format.short_address p.address, a_dim);
      (Format.fmt_amount p.amount, a_amount);
@@ -20,12 +23,13 @@ let position_row (r : Portfolio.row) =
      share |]
 
 let subtotal_row (b : Portfolio.asset_block) =
-  [| (Config.string_of_asset b.coin, a_subtotal);
+  [| (Format.truncate 12 b.coin, a_subtotal);
      ("", a_dim);
      ("TOTAL", a_subtotal);
-     ( (match b.price with
-        | Some p -> "@ " ^ Format.fmt_usd p
-        | None -> "price unavailable"),
+     ( (match (b.price, b.subtotal_usd) with
+        | Some p, _ -> "@ " ^ Format.fmt_usd p
+        | None, Some _ -> ""  (* valued by the source, not a spot price *)
+        | None, None -> "price unavailable"),
        a_dim );
      (Format.fmt_amount b.subtotal_amount, a_subtotal);
      ((match b.subtotal_usd with Some v -> Format.fmt_usd v | None -> "-"), a_subtotal);

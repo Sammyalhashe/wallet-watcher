@@ -11,6 +11,6 @@ let parse_balance json =
 
 let fetch address =
   let label = "BTC " ^ address in
-  Http.fetch_single ~asset:Config.BTC ~label
+  Http.fetch_single ~asset:Config.btc ~label
     (Http.get ~label (api_url ^ Uri.pct_encode address))
     parse_balance

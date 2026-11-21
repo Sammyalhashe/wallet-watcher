@@ -1,7 +1,18 @@
 (* The result of one fetch round, before any analytics. *)
 
-(* What one address holds on one network, e.g. [(AVAX, 12.3); (ETH, 0.4)], or why it failed. *)
-type fetch_result = ((Config.asset * float) list, string) result
+(* [usd] is set when the source values the holding itself; otherwise it is
+   priced as amount * spot price. Loans have negative [amount] and [usd]. *)
+type holding = {
+  asset : Config.asset;
+  amount : float;
+  usd : float option;
+  detail : string option; (* e.g. "Aave V3 deposit" *)
+}
+
+let holding asset amount = { asset; amount; usd = None; detail = None }
+
+(* What one address holds on one network, or why it failed. *)
+type fetch_result = (holding list, string) result
 
 type balance = {
   wallet : string; (* the wallet's label *)

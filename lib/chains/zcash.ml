@@ -16,6 +16,6 @@ let fetch address =
     Lwt.return (Error "ZEC: shielded addresses are not supported")
   else
     let label = "ZEC " ^ address in
-    Http.fetch_single ~asset:Config.ZEC ~label
+    Http.fetch_single ~asset:Config.zec ~label
       (Http.get ~label (api_url ^ Uri.pct_encode address))
       (parse_balance address)

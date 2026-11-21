@@ -25,7 +25,7 @@ let parse_balance json =
 
 let fetch address =
   let label = "SUI " ^ address in
-  Http.fetch_single ~asset:Config.SUI ~label
+  Http.fetch_single ~asset:Config.sui ~label
     (Http.rpc_call ~label ~url:rpc_url ~meth:"suix_getAllBalances"
        ~params:[ `String address ])
     parse_balance

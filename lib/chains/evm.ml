@@ -45,11 +45,11 @@ let get_native_balance ~label ~url address =
     parse_native_balance
 
 let fetch_native ~asset ~url address =
-  get_native_balance ~label:(Config.string_of_asset asset ^ " " ^ address) ~url address
-  >|= Result.map (fun amount -> [ (asset, amount) ])
+  get_native_balance ~label:(asset ^ " " ^ address) ~url address
+  >|= Result.map (fun amount -> [ Snapshot.holding asset amount ])
 
-let fetch_ethereum = fetch_native ~asset:Config.ETH ~url:ethereum_rpc_url
-let fetch_base = fetch_native ~asset:Config.ETH ~url:base_rpc_url
+let fetch_ethereum = fetch_native ~asset:Config.eth ~url:ethereum_rpc_url
+let fetch_base = fetch_native ~asset:Config.eth ~url:base_rpc_url
 
 let fetch_bridged_weth address =
   let label = "ETH (WETH.e) " ^ address in
@@ -66,8 +66,8 @@ let fetch_bridged_weth address =
 let combine_avalanche native weth =
   let* avax = native in
   match weth with
-  | Ok eth -> Ok [ (Config.AVAX, avax); (Config.ETH, eth) ]
-  | Error _ -> Ok [ (Config.AVAX, avax) ]
+  | Ok eth -> Ok [ Snapshot.holding Config.avax avax; Snapshot.holding Config.eth eth ]
+  | Error _ -> Ok [ Snapshot.holding Config.avax avax ]
 
 let fetch_avalanche address =
   Lwt.both

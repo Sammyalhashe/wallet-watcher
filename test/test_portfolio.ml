@@ -6,6 +6,7 @@ module Nav = Wallet_watcher_tui.Nav
 module Pie_view = Wallet_watcher_tui.Pie_view
 module Screen = Wallet_watcher_tui.Screen
 module Palette = Wallet_watcher_tui.Palette
+module Table_view = Wallet_watcher_tui.Table_view
 
 let failures = ref 0
 let passes = ref 0
@@ -55,12 +56,12 @@ let find name slices =
 
 let two_wallets =
   snapshot_of
-    ~prices:[ (Config.BTC, 60000.); (Config.ETH, 2000.); (Config.AVAX, 10.) ]
-    [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]);
-      balance "A" Config.Ethereum (Ok [ (Config.ETH, 1.) ]);
-      balance "A" Config.Base (Ok [ (Config.ETH, 2.) ]);
-      balance "A" Config.Avalanche (Ok [ (Config.AVAX, 100.); (Config.ETH, 1.) ]);
-      balance "B" Config.Ethereum (Ok [ (Config.ETH, 4.) ]);
+    ~prices:[ (Config.btc, 60000.); (Config.eth, 2000.); (Config.avax, 10.) ]
+    [ balance "A" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]);
+      balance "A" Config.Ethereum (Ok [ (Snapshot.holding Config.eth 1.) ]);
+      balance "A" Config.Base (Ok [ (Snapshot.holding Config.eth 2.) ]);
+      balance "A" Config.Avalanche (Ok [ (Snapshot.holding Config.avax 100.); (Snapshot.holding Config.eth 1.) ]);
+      balance "B" Config.Ethereum (Ok [ (Snapshot.holding Config.eth 4.) ]);
       balance "B" Config.Solana (Error "timed out") ]
 
 (* {1 Tests} *)
@@ -100,7 +101,7 @@ let test_by_wallet () =
 let test_asset_by_wallet () =
   print_endline "asset_by_wallet";
   let p = Portfolio.of_snapshot two_wallets in
-  let slices = Portfolio.asset_by_wallet p Config.ETH in
+  let slices = Portfolio.asset_by_wallet p Config.eth in
   check "wallets in a tie-free order" (names slices = [ "B"; "A" ] || names slices = [ "A"; "B" ]);
   check_float "ETH on ethereum+base+avalanche merges for A" ~expect:4.
     (Option.get (find "A" slices).amount);
@@ -122,10 +123,10 @@ let test_unpriced () =
   print_endline "unpriced assets";
   let p =
     Portfolio.of_snapshot
-      (snapshot_of ~prices:[ (Config.BTC, 100.) ]
-         [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 2.) ]);
-           balance "A" Config.Sui (Ok [ (Config.SUI, 500.) ]);
-           balance "B" Config.Sui (Ok [ (Config.SUI, 100.) ]) ])
+      (snapshot_of ~prices:[ (Config.btc, 100.) ]
+         [ balance "A" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 2.) ]);
+           balance "A" Config.Sui (Ok [ (Snapshot.holding Config.sui 500.) ]);
+           balance "B" Config.Sui (Ok [ (Snapshot.holding Config.sui 100.) ]) ])
   in
   let slices = Portfolio.by_asset p in
   check "unpriced sorts last" (names slices = [ "BTC"; "SUI" ]);
@@ -139,7 +140,7 @@ let test_unpriced () =
   check "wallet holding only unpriced coins has no pct"
     ((find "B" by_wallet).pct = None && (find "B" by_wallet).usd = None);
   check "unpriced wallet sorts last" (names by_wallet = [ "A"; "B" ]);
-  let sui_split = Portfolio.asset_by_wallet p Config.SUI in
+  let sui_split = Portfolio.asset_by_wallet p Config.sui in
   check "units still split an unpriced coin" (names sui_split = [ "A"; "B" ]);
   check_float "A holds 5/6 of SUI" ~expect:(500. /. 600. *. 100.)
     (Option.get (find "A" sui_split).pct);
@@ -149,18 +150,18 @@ let test_zero_balances () =
   print_endline "zero balances";
   let p =
     Portfolio.of_snapshot
-      (snapshot_of ~prices:[ (Config.SOL, 100.); (Config.BTC, 100.) ]
-         [ balance "A" Config.Solana (Ok [ (Config.SOL, 0.) ]);
-           balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]);
-           balance "Empty" Config.Solana (Ok [ (Config.SOL, 0.) ]) ])
+      (snapshot_of ~prices:[ (Config.sol, 100.); (Config.btc, 100.) ]
+         [ balance "A" Config.Solana (Ok [ (Snapshot.holding Config.sol 0.) ]);
+           balance "A" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]);
+           balance "Empty" Config.Solana (Ok [ (Snapshot.holding Config.sol 0.) ]) ])
   in
   check "positions keep the zero entry" (List.length p.positions = 3);
   check "by_asset omits zero" (names (Portfolio.by_asset p) = [ "BTC" ]);
   check "by_wallet omits zero-only wallets" (names (Portfolio.by_wallet p) = [ "A" ]);
-  check "asset_by_wallet omits zero" (Portfolio.asset_by_wallet p Config.SOL = []);
+  check "asset_by_wallet omits zero" (Portfolio.asset_by_wallet p Config.sol = []);
   check "wallet_by_asset omits zero"
     (names (Portfolio.wallet_by_asset p "A") = [ "BTC" ]);
-  let sol = List.find (fun (b : Portfolio.asset_block) -> b.coin = Config.SOL) (Portfolio.table p) in
+  let sol = List.find (fun (b : Portfolio.asset_block) -> b.coin = Config.sol) (Portfolio.table p) in
   check "table share undefined at zero total"
     (List.for_all (fun (r : Portfolio.row) -> r.share = None) sol.rows)
 
@@ -168,13 +169,52 @@ let test_table () =
   print_endline "table blocks";
   let blocks = Portfolio.table (Portfolio.of_snapshot two_wallets) in
   check "blocks follow first appearance" (List.map (fun (b : Portfolio.asset_block) -> b.coin) blocks
-                                          = [ Config.BTC; Config.ETH; Config.AVAX ]);
+                                          = [ Config.btc; Config.eth; Config.avax ]);
   let eth = List.nth blocks 1 in
   check "one row per position" (List.length eth.rows = 4);
   check_float "subtotal amount" ~expect:8. eth.subtotal_amount;
   check_float "subtotal usd" ~expect:16000. (Option.get eth.subtotal_usd);
   check_float "row shares sum to 100" ~expect:100.
     (List.fold_left (fun acc (r : Portfolio.row) -> acc +. Option.get r.share) 0. eth.rows)
+
+let self_valued ?detail asset amount usd : Snapshot.holding =
+  { asset; amount; usd = Some usd; detail }
+
+let with_defi =
+  snapshot_of ~prices:[ (Config.btc, 100.) ]
+    [ balance "A" Config.Bitcoin (Ok [ Snapshot.holding Config.btc 1. ]);
+      balance "A" Config.Base
+        (Ok [ self_valued ~detail:"Aave V3 deposit" "USDC" 500. 500.;
+              self_valued ~detail:"Aave V3 loan" "USDC" (-200.) (-200.);
+              self_valued Config.eth 0.1 300. ]) ]
+
+let test_self_valued_and_loans () =
+  print_endline "self-valued holdings and loans";
+  let p = Portfolio.of_snapshot with_defi in
+  check_float "net total subtracts the loan" ~expect:700. (Option.get p.total_usd);
+  check "self-valued holdings count as priced" (not p.total_is_partial);
+  let slices = Portfolio.by_asset p in
+  check "slices by gross value" (names slices = [ "USDC"; "ETH"; "BTC" ]);
+  check_float "slice excludes the loan" ~expect:500. (Option.get (find "USDC" slices).usd);
+  check_float "pcts sum to 100" ~expect:100. (pct_sum slices);
+  check_float "wallet slice is gross" ~expect:900.
+    (Option.get (find "A" (Portfolio.by_wallet p)).usd);
+  let usdc =
+    List.find (fun (b : Portfolio.asset_block) -> b.coin = "USDC") (Portfolio.table p)
+  in
+  check "loan row stays in the table" (List.length usdc.rows = 2);
+  check_float "subtotal is net" ~expect:300. (Option.get usdc.subtotal_usd);
+  let loan = List.nth usdc.rows 1 in
+  check_float "loan row is negative" ~expect:(-200.) (Option.get loan.usd_value);
+  check "loan has no share" (loan.share = None);
+  check_float "deposit holds all units" ~expect:100. (Option.get (List.hd usdc.rows).share);
+  check_string "network cell shows detail" ~expect:"base - Aave V3 loan"
+    (fst (Table_view.position_row loan).(1));
+  check_string "self-valued subtotal has no price" ~expect:""
+    (fst (Table_view.subtotal_row usdc).(3));
+  check "drill into a token"
+    (Nav.drill_target p { Nav.view = Nav.Pie; focus = Nav.Root_by_coin; selected = 0 }
+     = Some (Nav.Coin "USDC"))
 
 (* {1 Navigation} *)
 
@@ -193,35 +233,35 @@ let test_navigation () =
   check "move clamps at bottom" ((step root (Nav.Move 10)).selected = 2);
   check "moves ignored in table"
     ((step { root with view = Nav.Table } (Nav.Move 1)).selected = 0);
-  check "drill coin row" ((step root Nav.Drill).focus = Nav.Coin Config.BTC);
+  check "drill coin row" ((step root Nav.Drill).focus = Nav.Coin Config.btc);
   check "drill resets selection" ((step (pie_at Nav.Root_by_coin 1) Nav.Drill).selected = 0);
   check "drill second coin"
-    ((step (pie_at Nav.Root_by_coin 1) Nav.Drill).focus = Nav.Coin Config.ETH);
+    ((step (pie_at Nav.Root_by_coin 1) Nav.Drill).focus = Nav.Coin Config.eth);
   check "tab at root switches" ((step root Nav.Switch_root).focus = Nav.Root_by_wallet);
   check "tab twice returns"
     ((step (step root Nav.Switch_root) Nav.Switch_root).focus = Nav.Root_by_coin);
   check "drill wallet row"
     ((step (pie_at Nav.Root_by_wallet 0) Nav.Drill).focus = Nav.Wallet "A");
   check "tab is a no-op when drilled"
-    ((step (pie_at (Nav.Coin Config.BTC) 0) Nav.Switch_root).focus = Nav.Coin Config.BTC);
+    ((step (pie_at (Nav.Coin Config.btc) 0) Nav.Switch_root).focus = Nav.Coin Config.btc);
   check "drill is a no-op on a leaf"
-    ((step (pie_at (Nav.Coin Config.ETH) 0) Nav.Drill).focus = Nav.Coin Config.ETH);
-  let back = step (pie_at (Nav.Coin Config.ETH) 0) Nav.Up in
+    ((step (pie_at (Nav.Coin Config.eth) 0) Nav.Drill).focus = Nav.Coin Config.eth);
+  let back = step (pie_at (Nav.Coin Config.eth) 0) Nav.Up in
   check "up from coin returns to coin root" (back.focus = Nav.Root_by_coin);
   check "up restores the drilled row" (back.selected = 1);
   check "up from wallet returns to wallet root"
     ((step (pie_at (Nav.Wallet "B") 0) Nav.Up).focus = Nav.Root_by_wallet);
   check "up at root is a no-op" (step root Nav.Up = root);
   check "toggle keeps focus"
-    ((step (pie_at (Nav.Coin Config.BTC) 1) Nav.Toggle_view).focus = Nav.Coin Config.BTC)
+    ((step (pie_at (Nav.Coin Config.btc) 1) Nav.Toggle_view).focus = Nav.Coin Config.btc)
 
 let test_other_not_drillable () =
   print_endline "folded Other row";
   let many =
     List.init 10 (fun i ->
-        balance (Printf.sprintf "W%d" i) Config.Bitcoin (Ok [ (Config.BTC, float_of_int (10 - i)) ]))
+        balance (Printf.sprintf "W%d" i) Config.Bitcoin (Ok [ (Snapshot.holding Config.btc (float_of_int (10 - i))) ]))
   in
-  let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.BTC, 1.) ] many) in
+  let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.btc, 1.) ] many) in
   let rows = Nav.rows p Nav.Root_by_wallet in
   check "nav fold size matches palette" (Nav.max_slices = Palette.max_slices);
   check "folds to palette size" (List.length rows = 8);
@@ -277,16 +317,16 @@ let test_format () =
     (String.for_all (fun c -> Char.code c < 0x80) (Format.truncate 5 "\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"));
   check_string "breadcrumb root" ~expect:"NET WORTH > by coin" (Pie_view.breadcrumb Nav.Root_by_coin);
   check_string "breadcrumb coin" ~expect:"NET WORTH > BTC by wallet"
-    (Pie_view.breadcrumb (Nav.Coin Config.BTC));
+    (Pie_view.breadcrumb (Nav.Coin Config.btc));
   check_string "breadcrumb wallet" ~expect:"NET WORTH > Ledger by coin"
     (Pie_view.breadcrumb (Nav.Wallet "Ledger"))
 
 let nasty_snapshot =
-  snapshot_of ~prices:[ (Config.BTC, 100.) ]
-    [ balance "Caf\xc3\xa9 wallet with a long name" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]);
+  snapshot_of ~prices:[ (Config.btc, 100.) ]
+    [ balance "Caf\xc3\xa9 wallet with a long name" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]);
       balance "Caf\xc3\xa9 wallet with a long name" Config.Base
         (Error "Line 1:\nInvalid token\r\n\xc3");
-      balance "B" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]
+      balance "B" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]) ]
 
 let renders_without_raising state =
   match Screen.render state (Portfolio.of_snapshot nasty_snapshot) (80, 40) with
@@ -315,12 +355,12 @@ let test_render_is_safe () =
 
 let test_total_options () =
   print_endline "total completeness";
-  let none = Portfolio.of_snapshot (snapshot_of [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]) in
+  let none = Portfolio.of_snapshot (snapshot_of [ balance "A" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]) ]) in
   check "nothing priced gives no total" (none.total_usd = None);
   check "nothing priced is partial" none.total_is_partial;
   let full =
     Portfolio.of_snapshot
-      (snapshot_of ~prices:[ (Config.BTC, 5.) ] [ balance "A" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ])
+      (snapshot_of ~prices:[ (Config.btc, 5.) ] [ balance "A" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]) ])
   in
   check "fully priced total" (full.total_usd = Some 5. && not full.total_is_partial);
   let pie_state = pie_at Nav.Root_by_coin 0 in
@@ -331,17 +371,17 @@ let test_other_name_collision () =
   let many =
     List.init 9 (fun i ->
         balance (if i = 8 then "Other (2)" else Printf.sprintf "W%d" i) Config.Bitcoin
-          (Ok [ (Config.BTC, float_of_int (20 - i)) ]))
+          (Ok [ (Snapshot.holding Config.btc (float_of_int (20 - i))) ]))
   in
-  let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.BTC, 1.) ] many) in
+  let p = Portfolio.of_snapshot (snapshot_of ~prices:[ (Config.btc, 1.) ] many) in
   let rows = Nav.rows p Nav.Root_by_wallet in
   check_string "bucket named like a wallet" ~expect:"Other (2)" (List.nth rows 7).name;
   check "bucket does not drill"
     (Nav.drill_target p (pie_at Nav.Root_by_wallet 7) = None);
   check "real wallet with the same name drills when it is a slice"
     (let few = Portfolio.of_snapshot
-         (snapshot_of ~prices:[ (Config.BTC, 1.) ]
-            [ balance "Other (2)" Config.Bitcoin (Ok [ (Config.BTC, 1.) ]) ]) in
+         (snapshot_of ~prices:[ (Config.btc, 1.) ]
+            [ balance "Other (2)" Config.Bitcoin (Ok [ (Snapshot.holding Config.btc 1.) ]) ]) in
      Nav.drill_target few (pie_at Nav.Root_by_wallet 0) = Some (Nav.Wallet "Other (2)"))
 
 let () =
@@ -356,6 +396,7 @@ let () =
   test_unpriced ();
   test_zero_balances ();
   test_table ();
+  test_self_valued_and_loans ();
   test_navigation ();
   test_other_not_drillable ();
   test_key_mapping ();

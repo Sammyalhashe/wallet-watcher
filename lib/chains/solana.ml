@@ -11,6 +11,6 @@ let parse_balance json =
 
 let fetch address =
   let label = "SOL " ^ address in
-  Http.fetch_single ~asset:Config.SOL ~label
+  Http.fetch_single ~asset:Config.sol ~label
     (Http.rpc_call ~label ~url:rpc_url ~meth:"getBalance" ~params:[ `String address ])
     parse_balance

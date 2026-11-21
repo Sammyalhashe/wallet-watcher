@@ -50,4 +50,4 @@ let fetch address =
         >>= Http.read_response label)
       |> Http.with_timeout label
     in
-    Http.fetch_single ~asset:Config.TAO ~label request parse_balance
+    Http.fetch_single ~asset:Config.tao ~label request parse_balance
