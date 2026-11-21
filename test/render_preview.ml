@@ -16,9 +16,14 @@ let snapshot : Snapshot.t =
         balance "Cold Storage" Config.Ethereum
           "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
           (Ok [ (Snapshot.holding Config.eth 12.5) ]);
+        (* Shaped like a Zerion result: self-valued, with a deposit and a loan. *)
         balance "Cold Storage" Config.Base
           "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-          (Ok [ (Snapshot.holding Config.eth 3.25) ]);
+          (Ok [ { asset = Config.eth; amount = 3.25; usd = Some 10017.12; detail = None };
+                { asset = "USDC"; amount = 25000.; usd = Some 25000.;
+                  detail = Some "Aave V3 deposit" };
+                { asset = "USDC"; amount = -8000.; usd = Some (-8000.);
+                  detail = Some "Aave V3 loan" } ]);
         balance "Cold Storage" Config.Avalanche
           "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
           (Ok [ (Snapshot.holding Config.avax 410.); (Snapshot.holding Config.eth 1.5) ]);

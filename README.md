@@ -7,16 +7,16 @@ you can drill into by coin or by wallet. Read-only: it needs addresses, never
 keys.
 
 ```text
- NET WORTH  $7,295,353.72 (partial)
+ NET WORTH  $7,312,353.72 (partial)
  ----------------------------------------------------------------------------------------------------
  NET WORTH > by coin
 
-    ⣠⣴⣶⡇⡏⢸⣿⣶⣦⣄       # BTC   88.85%    100.918125  $6,482,127.59
-  ⣠⣾⣌⢻⣿⣿ ⢸⣿⣿⣿⣿⣷⣄     = SOL    8.54%   4210.500000    $623,280.32
- ⢰⣿⣿⣿⣷⣝⢿⡄⢸⣿⣿⣿⣿⣿⣿⡆    + ETH    2.43%     57.450000    $177,071.82
- ⣿⣿⣿⣿⣿⣿⣦⡁⢸⣿⣿⣿⣿⣿⣿⣿    * AVAX   0.18%    410.000000     $12,874.00
- ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿    o SUI        -  15000.000000              -
- ⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇
+    ⣠⣴⣶⡇⡟⢸⣿⣶⣦⣄       # BTC   88.55%    100.918125  $6,482,127.59
+  ⣠⣶⣜⢿⣿⣷⠁⢸⣿⣿⣿⣿⣷⣄     = SOL    8.51%   4210.500000    $623,280.32
+ ⢰⣿⣿⣿⣷⡝⢿⡀⢸⣿⣿⣿⣿⣿⣿⡆    + ETH    2.42%     57.450000    $177,071.82
+ ⣿⣿⣿⣿⣿⣿⣦⡃⢸⣿⣿⣿⣿⣿⣿⣿    * USDC   0.34%  25000.000000     $25,000.00
+ ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿    o AVAX   0.18%    410.000000     $12,874.00
+ ⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇    x SUI        -  15000.000000              -
   ⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋
     ⠙⠻⠿⣿⣿⣿⣿⠿⠟⠋
  ----------------------------------------------------------------------------------------------------
@@ -34,22 +34,51 @@ Contents: [Networks](#supported-networks) | [Configuration](#configuration) |
 
 | Config key  | Assets shown      | Data source                                   | Notes                                                       |
 | ----------- | ----------------- | --------------------------------------------- | ----------------------------------------------------------- |
-| `bitcoin`   | BTC               | mempool.space address API                     | Confirmed balance only.                                     |
-| `ethereum`  | ETH               | publicnode JSON-RPC (`eth_getBalance`)        |                                                             |
-| `base`      | ETH               | publicnode JSON-RPC (`eth_getBalance`)        | Counts as the same asset as Ethereum ETH.                   |
-| `avalanche` | AVAX, ETH         | publicnode C-Chain JSON-RPC                   | ETH is bridged WETH.e. If the WETH.e lookup fails, AVAX is still shown and the ETH leg is dropped without a footer error. |
+| `bitcoin`   | BTC               | An address: mempool.space address API. A descriptor: your bitcoind (`scantxoutset`) | Confirmed balance only. A value containing `(` is an output descriptor, which counts every address of an HD or multisig wallet; it needs the `BITCOIND_RPC_*` variables. |
+| `ethereum`  | ETH, or every token and DeFi position | publicnode JSON-RPC (`eth_getBalance`), or Zerion when `ZERION_API_KEY` is set | See [EVM with Zerion](#evm-with-zerion).            |
+| `base`      | ETH, or every token and DeFi position | publicnode JSON-RPC (`eth_getBalance`), or Zerion | Counts as the same asset as Ethereum ETH.         |
+| `avalanche` | AVAX, ETH, or every token and DeFi position | publicnode C-Chain JSON-RPC, or Zerion  | Without Zerion, ETH is bridged WETH.e. If the WETH.e lookup fails, AVAX is still shown and the ETH leg is dropped without a footer error. |
 | `solana`    | SOL               | `api.mainnet-beta.solana.com` (`getBalance`)  | Native SOL only.                                            |
 | `sui`       | SUI               | `fullnode.mainnet.sui.io` (`suix_getAllBalances`) | Native SUI only; other coin types are ignored.          |
 | `zcash`     | ZEC               | Blockchair                                    | Transparent addresses only. Addresses starting `zs`, `zc` or `u1` are refused. |
 | `bittensor` | TAO               | Taostats API                                  | Needs `TAOSTATS_API_KEY`; without it the row shows as failed, not zero. |
 
-USD prices come from CoinGecko. An asset CoinGecko does not return is listed
-with an unknown price: it takes no pie area and its share is `-`, never 0%.
+USD prices for the native coins come from CoinGecko. An asset CoinGecko does
+not return is listed with an unknown price: it takes no pie area and its share
+is `-`, never 0%. Tokens from Zerion carry their own USD value.
 
 Monero is not supported: reading a Monero balance requires a view key.
 
-ETH on `ethereum`, `base` and `avalanche` is one asset. It merges in the
-by-coin pie and in the ETH drill-down.
+An asset is identified by its upper-case symbol, so ETH on `ethereum`, `base`
+and `avalanche` is one asset, as is USDC on every chain. It merges in the
+by-coin pie and in the drill-down.
+
+### Bitcoin descriptors
+
+A `bitcoin` value such as `wsh(sortedmulti(2,[fp/48h/0h/0h/2h]xpub.../<0;1>/*,...))`
+is balanced by your own node with `scantxoutset`, so no address leaves your
+network. The checksum is optional. `<0;1>` is expanded into the receive and
+change descriptors, so Bitcoin Core older than 29 works too; wildcard
+descriptors are scanned to index 1000. Scans run one at a time and may take
+minutes each, with a 10-minute timeout. The RPC user needs only
+`scantxoutset` in its whitelist.
+
+### EVM with Zerion
+
+With `ZERION_API_KEY` set, each `ethereum`, `base` and `avalanche` entry makes
+one Zerion positions request for that chain, and shows ERC-20 tokens and DeFi
+positions (deposits, loans, staking, LP and vault shares) with Zerion's USD
+values. The table's NETWORK column adds the protocol and position type, e.g.
+`base - Aave V3 deposit`.
+
+- A loan is shown with a negative amount and value. The net worth subtracts
+  it; pie slices show only what is held.
+- Positions Zerion marks as not displayable, and positions worth under $1,
+  are dropped.
+- Every remaining position is counted as Zerion reports it. If a protocol's
+  receipt token also shows up as a wallet balance, it is counted twice.
+
+Without the key, these networks fall back to native balances as above.
 
 Balances are fetched once at launch. There is no refresh key; restart to
 refetch. A failing endpoint degrades only its own wallet and network, and the
@@ -78,6 +107,12 @@ most one address per network. At least one address is required.
         "solana": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         "zcash": "t1XPq7rYVWBiyHdHRg1PJZrcCRrixXiLQrd"
       }
+    },
+    {
+      "label": "Multisig",
+      "addresses": {
+        "bitcoin": "wsh(sortedmulti(2,[aaaaaaaa/48h/0h/0h/2h]xpub6E.../<0;1>/*,[bbbbbbbb/48h/0h/0h/2h]xpub6F.../<0;1>/*))"
+      }
     }
   ]
 }
@@ -100,12 +135,21 @@ The first match wins:
 
 ### Environment
 
-| Variable           | Effect                                                   |
-| ------------------ | -------------------------------------------------------- |
-| `TAOSTATS_API_KEY` | Enables Bittensor balances. Sent as the `authorization` header. |
+| Variable                | Effect                                                   |
+| ----------------------- | -------------------------------------------------------- |
+| `TAOSTATS_API_KEY`      | Enables Bittensor balances. Sent as the `authorization` header. |
+| `ZERION_API_KEY`        | Reads EVM tokens and DeFi positions from Zerion. Sent as the Basic auth user. |
+| `BITCOIND_RPC_URL`      | bitcoind RPC endpoint for bitcoin descriptors, e.g. `http://127.0.0.1:8332`. |
+| `BITCOIND_RPC_USER`     | bitcoind RPC user.                                       |
+| `BITCOIND_RPC_PASSWORD` | bitcoind RPC password.                                   |
+
+A descriptor without all three `BITCOIND_RPC_*` variables shows as failed, not
+zero.
 
 ```sh
 export TAOSTATS_API_KEY=...
+export ZERION_API_KEY=...
+export BITCOIND_RPC_URL=http://127.0.0.1:8332 BITCOIND_RPC_USER=walletwatcher BITCOIND_RPC_PASSWORD=...
 ```
 
 ## Keys and views
@@ -124,7 +168,7 @@ The dashboard opens on the table. Press `c` for the pie view.
 Views:
 
 - **Table**: every position with amount, USD value and share of the asset's
-  units, plus a subtotal row per asset.
+  held units, plus a subtotal row per asset. Loans have no share.
 - **Pie, by coin**: share of net worth per asset. Enter on a coin shows that
   coin's units split across wallets.
 - **Pie, by wallet**: share of net worth per wallet. Enter on a wallet shows
@@ -133,9 +177,9 @@ Views:
 Beyond eight slices the tail folds into an `Other (n)` row, which cannot be
 drilled into.
 
-The banner reads `NET WORTH $...`. It appends `(partial)` when a fetch failed
-or a held asset has no price, so the total is a lower bound. It reads
-`n/a (prices unavailable)` when no position could be priced.
+The banner reads `NET WORTH $...`, net of loans. It appends `(partial)` when a
+fetch failed or a held asset has no price, so the total is a lower bound. It
+reads `n/a (prices unavailable)` when no position could be priced.
 
 ## Nix
 
@@ -161,6 +205,14 @@ installs the package and writes `~/.config/wallet-watcher/config.json`.
 | `configJson`                   | string, read-only               | The `config.json` rendered from `wallets`.                              |
 | `configFile`                   | null or path string             | An already-rendered config, linked into place instead of writing `configJson` to the store. |
 | `taostatsApiKeyFile`           | null or path string             | File holding the Taostats key. The binary is wrapped to read it at launch. |
+| `zerionApiKeyFile`             | null or path string             | File holding the Zerion key, exported as `ZERION_API_KEY` at launch. |
+| `bitcoind.url`                 | null or string                  | Exported as `BITCOIND_RPC_URL`.                                         |
+| `bitcoind.user`                | null or string                  | Exported as `BITCOIND_RPC_USER`.                                        |
+| `bitcoind.passwordFile`        | null or path string             | File holding the RPC password, exported as `BITCOIND_RPC_PASSWORD` at launch. |
+
+Key files are read only if readable when the program starts, so they never
+enter the Nix store. Without any of these options the package is installed
+unwrapped.
 
 With `wallets = { }` and no `configFile`, no config file is written.
 
@@ -201,6 +253,8 @@ reads the home-manager user's `configJson`:
   sops.secrets.cold_storage_btc = { };
   sops.secrets.cold_storage_eth = { };
   sops.secrets.taostats_api_key = { owner = "alice"; };
+  sops.secrets.zerion_api_key = { owner = "alice"; };
+  sops.secrets.bitcoind_rpc_password = { owner = "alice"; };
 
   sops.templates."wallet-watcher.json" = {
     owner = "alice";
@@ -218,6 +272,12 @@ reads the home-manager user's `configJson`:
       };
       configFile = config.sops.templates."wallet-watcher.json".path;
       taostatsApiKeyFile = config.sops.secrets.taostats_api_key.path;
+      zerionApiKeyFile = config.sops.secrets.zerion_api_key.path;
+      bitcoind = {
+        url = "http://127.0.0.1:8332";
+        user = "walletwatcher";
+        passwordFile = config.sops.secrets.bitcoind_rpc_password.path;
+      };
     };
   };
 }
@@ -257,21 +317,24 @@ mirrors `bin/main.ml`: `Config.load`, then `Chain_api.fetch_all`, then
 bin/
   main.ml            Entry point: resolve config path, fetch, launch the TUI.
 lib/                 Library wallet_watcher (no Notty dependency).
-  config.ml          Config types (network, asset), JSON parsing, config path lookup,
-                     network keys, CoinGecko ids.
-  chain_api.ml       Dispatch network -> fetcher, assets_of_network, fetch_all (everything
-                     concurrent, one snapshot).
-  snapshot.ml        Result of one fetch round: per-address balances, prices, price error.
+  config.ml          Config types (network; asset = symbol), JSON parsing, config path
+                     lookup, network keys, native-coin CoinGecko ids.
+  chain_api.ml       Dispatch network -> fetcher (Zerion for EVM when keyed),
+                     assets_of_network, fetch_all (everything concurrent, one snapshot).
+  snapshot.ml        Holdings and the result of one fetch round: per-address
+                     balances, prices, price error.
   portfolio.ml       Analytics: positions, failures, total_usd (option) and
                      total_is_partial; by_asset, by_wallet, asset_by_wallet,
                      wallet_by_asset; fold (Other (n)); table.
   pie.ml, pie.mli    Braille pie rasteriser, independent of any terminal library.
   chains/
-    http.ml          HTTP and JSON-RPC transport, 20 s timeout, errors as results.
+    http.ml          HTTP and JSON-RPC transport, per-call headers and timeout
+                     (20 s default), Basic auth, errors as results.
     json.ml          Total JSON and hex helpers; malformed input is Error, never raises.
     prices.ml        CoinGecko spot prices.
-    bitcoin.ml       BTC via mempool.space.
+    bitcoin.ml       BTC via mempool.space, or a descriptor via bitcoind scantxoutset.
     evm.ml           ETH, AVAX and WETH.e on Ethereum, Base and Avalanche.
+    zerion.ml        EVM tokens and DeFi positions via Zerion; needs ZERION_API_KEY.
     solana.ml        SOL via JSON-RPC.
     sui.ml           SUI via JSON-RPC.
     zcash.ml         ZEC via Blockchair; refuses shielded addresses.
@@ -300,12 +363,14 @@ config.json          Sample config.
 
 ### Add a network
 
-1. Create `lib/chains/<network>.ml` with `fetch : string -> (asset * float) list result Lwt.t`
-   (see `solana.ml` for the smallest example).
+1. Create `lib/chains/<network>.ml` with `fetch : string -> Snapshot.fetch_result Lwt.t`,
+   returning `Snapshot.holding` values (see `solana.ml` for the smallest
+   example). An asset is just its upper-case symbol; set `usd` on a holding
+   when the source values it.
 2. Add a variant to `Config.network`, and to `all_networks` and
-   `string_of_network`. Add a `Config.asset` (with `string_of_asset` and
-   `coingecko_id`) if it holds a new coin.
-3. Dispatch it in `Chain_api.fetch_network`, and list its assets in
+   `string_of_network`. For a new native coin, add a constant next to
+   `Config.btc` and its entry in `Config.coingecko_ids`, so it gets a price.
+3. Dispatch it in `Chain_api.fetch_network`, and list its priced assets in
    `Chain_api.assets_of_network`.
 4. Add the key to `networks` in `nix/hm-module.nix`.
 

@@ -4,7 +4,7 @@ open Lwt.Infix
 open Json
 
 let default_timeout_s = 20.0
-let user_agent = "wallet-watcher/0.2"
+let user_agent = "wallet-watcher/0.3"
 
 let headers =
   Cohttp.Header.of_list

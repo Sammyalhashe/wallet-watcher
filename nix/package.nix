@@ -3,7 +3,7 @@
 
 buildDunePackage {
   pname = "wallet_watcher";
-  version = "0.2.0";
+  version = "0.3.0";
 
   src = lib.fileset.toSource {
     root = ./..;
